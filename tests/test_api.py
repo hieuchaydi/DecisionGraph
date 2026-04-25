@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -245,4 +246,75 @@ def test_api_assumption_watch_and_benchmark_gate(tmp_path: Path) -> None:
 def test_api_assumption_watch_notify_requires_webhook() -> None:
     client = TestClient(app)
     out = client.post("/api/assumptions/watch", json={"notify": True})
+    assert out.status_code == 400
+
+
+def test_api_assumption_watch_with_notify_target_env(monkeypatch) -> None:
+    SERVICE.seed_demo()
+    monkeypatch.setenv("DECISIONGRAPH_ALERT_SLACK_WEBHOOK", "https://hooks.slack.local/test")
+    monkeypatch.setattr(SERVICE, "_dispatch_watch_notification", lambda webhook_url, payload: (True, None))
+    client = TestClient(app)
+    out = client.post("/api/assumptions/watch", json={"notify": True, "notify_target": "slack"})
+    assert out.status_code == 200
+    assert out.json()["notification"]["target"] == "slack"
+
+
+def test_api_merge_timeline_quality_and_audit() -> None:
+    SERVICE.seed_demo()
+    client = TestClient(app)
+    run_id = uuid4().hex[:8]
+
+    first = client.post(
+        "/api/ingest",
+        json={
+            "source_id": f"merge-api-1-{run_id}",
+            "source_type": "rfc",
+            "text": "Title: Introduce dedicated cache cluster\nSummary: isolate noisy workloads\nOwner: Platform\nAssumption: cache_hit_ratio > 0.9\nRisk: migration overhead",
+        },
+    )
+    second = client.post(
+        "/api/ingest",
+        json={
+            "source_id": f"merge-api-2-{run_id}",
+            "source_type": "rfc",
+            "text": "Title: Introduce dedicated cache cluster for workloads\nSummary: same direction\nOwner: SRE\nAssumption: cache_hit_ratio > 0.9\nRisk: operational complexity",
+        },
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_id = first.json()["decision"]["id"]
+    second_id = second.json()["decision"]["id"]
+
+    merged = client.post(
+        "/api/decisions/merge",
+        json={"primary_decision_id": first_id, "duplicate_decision_id": second_id, "note": "api dedupe"},
+    )
+    assert merged.status_code == 200
+    assert second_id in merged.json()["decision"]["supersedes"]
+
+    timeline = client.get("/api/decisions/timeline", params={"limit": 20, "component": "cache"})
+    assert timeline.status_code == 200
+    assert "items" in timeline.json()
+
+    quality = client.get("/api/decisions/evidence-quality", params={"limit": 20, "weak_threshold": 0.6})
+    assert quality.status_code == 200
+    assert "avg_score" in quality.json()
+
+    audit = client.get("/api/audit/logs", params={"limit": 50})
+    assert audit.status_code == 200
+    assert audit.json()["count"] >= 1
+
+
+def test_api_governance_strict_blocks_loose_ingest(monkeypatch) -> None:
+    monkeypatch.setenv("DECISIONGRAPH_GOVERNANCE_MODE", "strict")
+    monkeypatch.setenv("DECISIONGRAPH_GOVERNANCE_REQUIRED_FIELDS", "owners,assumptions,risks")
+    client = TestClient(app)
+    out = client.post(
+        "/api/ingest",
+        json={
+            "source_id": "governance-api-fail",
+            "source_type": "note",
+            "text": "Title: Missing governance fields\nSummary: no owner assumption risk lines",
+        },
+    )
     assert out.status_code == 400

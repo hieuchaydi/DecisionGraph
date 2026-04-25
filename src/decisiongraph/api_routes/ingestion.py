@@ -22,12 +22,15 @@ def create_ingestion_router(service: DecisionGraphService) -> APIRouter:
 
     @router.post('/api/ingest')
     def ingest(payload: IngestRequest) -> dict[str, object]:
-        decision = service.ingest_text(
-            source_id=payload.source_id,
-            text=payload.text,
-            source_type=payload.source_type,
-            url=payload.url,
-        )
+        try:
+            decision = service.ingest_text(
+                source_id=payload.source_id,
+                text=payload.text,
+                source_type=payload.source_type,
+                url=payload.url,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {'status': 'ok', 'decision': decision.to_dict()}
 
     @router.post('/api/ingest/directory')

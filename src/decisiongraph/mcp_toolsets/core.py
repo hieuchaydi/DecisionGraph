@@ -10,9 +10,23 @@ def register_core_tools(mcp, service: DecisionGraphService) -> None:
         return service.query(question).to_dict()
 
     @mcp.tool()
-    def list_decisions(limit: int = 20) -> list[dict]:
-        """List latest decisions."""
-        rows = service.list_decisions(limit=limit)
+    def list_decisions(
+        limit: int = 20,
+        query: str = "",
+        tag: str = "",
+        component: str = "",
+        owner: str = "",
+        decision_type: str = "",
+    ) -> list[dict]:
+        """List decisions with optional search/filter controls."""
+        rows = service.list_decisions(
+            limit=limit,
+            query=query or None,
+            tag=tag or None,
+            component=component or None,
+            owner=owner or None,
+            decision_type=decision_type or None,
+        )
         return [row.to_dict() for row in rows]
 
     @mcp.tool()
@@ -21,6 +35,16 @@ def register_core_tools(mcp, service: DecisionGraphService) -> None:
         row = service.supersede_decision(
             decision_id=decision_id,
             superseded_decision_id=superseded_decision_id,
+        )
+        return row.to_dict()
+
+    @mcp.tool()
+    def merge_decisions(primary_decision_id: str, duplicate_decision_id: str, note: str = "") -> dict:
+        """Merge duplicate decision into a primary decision."""
+        row = service.merge_decisions(
+            primary_decision_id=primary_decision_id,
+            duplicate_decision_id=duplicate_decision_id,
+            note=note,
         )
         return row.to_dict()
 
@@ -50,6 +74,7 @@ def register_core_tools(mcp, service: DecisionGraphService) -> None:
         warn_severities: str = "medium,high",
         critical_severities: str = "high",
         notify: bool = False,
+        notify_target: str = "webhook",
         webhook_url: str = "",
     ) -> dict:
         """Run assumption watcher and emit alerts for new/escalated stale assumptions."""
@@ -59,8 +84,38 @@ def register_core_tools(mcp, service: DecisionGraphService) -> None:
             warn_severities=warn_list,
             critical_severities=critical_list,
             notify=notify,
+            notify_target=notify_target,
             webhook_url=webhook_url or None,
         )
+
+    @mcp.tool()
+    def decision_timeline(
+        limit: int = 200,
+        component: str = "",
+        tag: str = "",
+        owner: str = "",
+        decision_type: str = "",
+        include_superseded: bool = True,
+    ) -> dict:
+        """Return chronological timeline of decisions."""
+        return service.decision_timeline(
+            limit=limit,
+            component=component or None,
+            tag=tag or None,
+            owner=owner or None,
+            decision_type=decision_type or None,
+            include_superseded=include_superseded,
+        )
+
+    @mcp.tool()
+    def evidence_quality(limit: int = 200, weak_threshold: float = 0.45) -> dict:
+        """Score evidence quality and flag weak decisions."""
+        return service.evidence_quality_report(limit=limit, weak_threshold=weak_threshold)
+
+    @mcp.tool()
+    def audit_logs(limit: int = 100, event: str = "") -> list[dict]:
+        """Return latest audit log events."""
+        return service.list_audit_logs(limit=limit, event_type=event or None)
 
     @mcp.tool()
     def set_metric(key: str, value: float, unit: str = '') -> dict:

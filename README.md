@@ -32,9 +32,13 @@ DecisionGraph keeps that reasoning traceable with evidence so teams can move fas
 - Decision query with confidence + warnings.
 - Decision list/search with filters (`q`, `tag`, `component`, `owner`, `decision_type`).
 - Supersede flow to link newer decisions over older rationale.
+- Merge/deduplicate flow for overlapping decisions.
+- Timeline view by component/tag/owner/type.
+- Evidence quality scoring with weak-decision detection.
 - Contradiction detection.
 - Stale assumption detection from live metrics.
-- Assumption watcher with `warn/critical` escalation tracking and optional webhook notification.
+- Assumption watcher with `warn/critical` escalation tracking, audit log, and optional connector notification (`webhook|slack|discord|teams`).
+- Governance policy mode (`off|warn|strict`) for required decision fields.
 - Summary report and graph snapshot.
 
 ### 3) Ops + Strategy Utilities
@@ -100,11 +104,15 @@ Inside chat, ask questions directly or use commands:
 /list 20
 /find <query>
 /supersede <new_id> <old_id>
+/merge <primary_id> <duplicate_id>
+/timeline 20
+/quality
 /get <decision_id>
 /guard <change request>
 /contradictions
 /stale
 /watch
+/audit 20
 /metrics
 /graph
 /report json
@@ -119,7 +127,11 @@ decisiongraph list --q "rabbitmq" --tag queues
 decisiongraph list --owner finance --decision-type risk-policy
 decisiongraph query "Why did we cap payment retries at 2?"
 decisiongraph supersede <new_decision_id> <old_decision_id>
-decisiongraph watch-assumptions
+decisiongraph merge <primary_decision_id> <duplicate_decision_id> --note "dedupe"
+decisiongraph timeline --component payment-retry --exclude-superseded
+decisiongraph evidence-quality --weak-threshold 0.5
+decisiongraph watch-assumptions --notify --notify-target slack
+decisiongraph audit-log --limit 100 --event assumption.watch_run
 decisiongraph guardrail "Increase retry attempts in payment flow"
 ```
 
@@ -161,10 +173,14 @@ Key variables:
 - `DECISIONGRAPH_API_TOKEN` optional API key (`x-api-key` header)
 - `DECISIONGRAPH_REQUIRE_TOKEN_IN_PRODUCTION=true` blocks startup in production without token
 - `DECISIONGRAPH_AUTO_SEED_DEMO=false` auto seed demo data at `decisiongraph serve` startup
+- `DECISIONGRAPH_GOVERNANCE_MODE=off` governance policy mode (`off|warn|strict`)
+- `DECISIONGRAPH_GOVERNANCE_REQUIRED_FIELDS=owners,assumptions,risks` required fields when governance is enabled
 - `DECISIONGRAPH_RATE_LIMIT_PER_MINUTE=240` per-client rate limit (`0` disables)
 - `DECISIONGRAPH_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:5173`
 - `DECISIONGRAPH_GITHUB_TOKEN` for GitHub ingestion
 - `DECISIONGRAPH_GITHUB_BASE_URL=https://api.github.com`
+- `DECISIONGRAPH_ALERT_WEBHOOK_URL` default watcher webhook
+- `DECISIONGRAPH_ALERT_SLACK_WEBHOOK`, `DECISIONGRAPH_ALERT_DISCORD_WEBHOOK`, `DECISIONGRAPH_ALERT_TEAMS_WEBHOOK` connector-specific watcher webhooks
 - `SE_URL` legacy fallback (prefer `DECISIONGRAPH_GITHUB_BASE_URL`)
 - `GROQ_API_KEY`, `GROQ_MODELS` optional model integration
 
@@ -213,11 +229,18 @@ curl -X POST http://127.0.0.1:8000/api/decisions/supersede \
   -d '{"decision_id":"<new_decision_id>","superseded_decision_id":"<old_decision_id>"}'
 ```
 
-7. Run assumption watcher:
+7. Merge duplicate decision records:
+```bash
+curl -X POST http://127.0.0.1:8000/api/decisions/merge \
+  -H "content-type: application/json" \
+  -d '{"primary_decision_id":"<primary_id>","duplicate_decision_id":"<duplicate_id>","note":"same rationale"}'
+```
+
+8. Run assumption watcher:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/assumptions/watch \
   -H "content-type: application/json" \
-  -d '{"warn_severities":["medium","high"],"critical_severities":["high"]}'
+  -d '{"warn_severities":["medium","high"],"critical_severities":["high"],"notify":true,"notify_target":"slack"}'
 ```
 
 ## API Surface (Main Endpoints)
@@ -229,13 +252,17 @@ curl -X POST http://127.0.0.1:8000/api/assumptions/watch \
 
 ### Decisions
 - `GET /api/decisions` (supports `limit`, `q`, `tag`, `component`, `owner`, `decision_type`)
+- `GET /api/decisions/timeline`
+- `GET /api/decisions/evidence-quality`
 - `GET /api/decisions/{decision_id}`
 - `POST /api/decisions/supersede`
+- `POST /api/decisions/merge`
 - `POST /api/query`
 - `POST /api/guardrail`
 - `GET /api/contradictions`
 - `GET /api/assumptions/stale`
 - `POST /api/assumptions/watch`
+- `GET /api/audit/logs`
 - `GET /api/metrics`
 - `POST /api/metrics`
 - `GET /api/graph`
@@ -275,11 +302,15 @@ curl -X POST http://127.0.0.1:8000/api/assumptions/watch \
 - `decisiongraph list --limit 20 [--q ...] [--tag ...] [--component ...] [--owner ...] [--decision-type ...]`
 - `decisiongraph get <decision_id>`
 - `decisiongraph supersede <decision_id> <superseded_decision_id>`
+- `decisiongraph merge <primary_decision_id> <duplicate_decision_id> [--note ...]`
+- `decisiongraph timeline [--limit 200] [--component ...] [--tag ...] [--owner ...] [--decision-type ...] [--exclude-superseded]`
+- `decisiongraph evidence-quality [--limit 200] [--weak-threshold 0.45]`
 - `decisiongraph query "..."`
 - `decisiongraph guardrail "..."`
 - `decisiongraph contradictions`
 - `decisiongraph stale-assumptions`
-- `decisiongraph watch-assumptions [--warn medium,high] [--critical high] [--notify --webhook-url ...]`
+- `decisiongraph watch-assumptions [--warn medium,high] [--critical high] [--notify --notify-target slack --webhook-url ...]`
+- `decisiongraph audit-log [--limit 100] [--event ...]`
 - `decisiongraph metric-set --key ... --value ... [--unit ...]`
 - `decisiongraph metrics`
 - `decisiongraph graph`
@@ -317,7 +348,7 @@ decisiongraph mcp
 ```
 
 Tool groups:
-- Core tools: query, list, supersede, guardrail, contradictions, stale assumptions, watch assumptions, metrics, graph, report.
+- Core tools: query, list/filter, supersede, merge, timeline, evidence quality, guardrail, contradictions, stale assumptions, watch assumptions, audit logs, metrics, graph, report.
 - Ingestion tools: git/jsonl/github/slack/jira connectors.
 - Insight tools: scenarios, KPI snapshot, dataset evaluation, benchmark gate, research scoring.
 - Strategy/Ops tools: strategy sections, doctor, runbook, release check, security audit.
@@ -350,7 +381,7 @@ cd docs && npm run lint && npm run build
 ```
 
 Latest local validation (2026-04-25):
-- Backend tests: pass
+- Backend tests: pass (`59 passed`)
 - Benchmark gate (`tools/ci_eval.jsonl`): pass
 - Frontend lint: pass
 - Frontend build: pass

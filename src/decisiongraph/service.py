@@ -3,12 +3,13 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
 
+from decisiongraph.config import alert_webhook_for_target, governance_mode, governance_required_fields
 from decisiongraph.extractor import HeuristicExtractor
 from decisiongraph.models import (
     Contradiction,
@@ -52,6 +53,7 @@ STOPWORDS = {
 }
 SEVERITY_RANK = {"low": 1, "medium": 2, "high": 3}
 VALID_SEVERITIES = set(SEVERITY_RANK.keys())
+ALERT_TARGETS = {"webhook", "slack", "discord", "teams"}
 
 
 def _tokenize(text: str) -> set[str]:
@@ -123,10 +125,67 @@ def _stale_severity(actual: float, threshold: float) -> str:
     return "low"
 
 
+def _parse_iso_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw[:10])
+    except ValueError:
+        return None
+
+
 class DecisionGraphService:
     def __init__(self, store: DecisionStore, extractor: HeuristicExtractor | None = None):
         self.store = store
         self.extractor = extractor or HeuristicExtractor()
+
+    def _audit(self, event: str, payload: dict[str, Any]) -> None:
+        self.store.append_audit_log(
+            {
+                "id": f"audit_{uuid.uuid4().hex[:12]}",
+                "event": event,
+                "ts": utc_now_iso(),
+                "payload": payload,
+            }
+        )
+
+    @staticmethod
+    def _missing_governance_fields(decision: Decision, required_fields: list[str]) -> list[str]:
+        missing: list[str] = []
+        for field_name in required_fields:
+            value = getattr(decision, field_name, None)
+            if isinstance(value, list):
+                if not any(str(item).strip() for item in value):
+                    missing.append(field_name)
+                continue
+            if value is None or not str(value).strip():
+                missing.append(field_name)
+        return missing
+
+    def _enforce_governance(self, decision: Decision, source_id: str, source_type: str) -> None:
+        mode = governance_mode()
+        if mode == "off":
+            return
+
+        required = governance_required_fields()
+        missing = self._missing_governance_fields(decision, required)
+        if not missing:
+            return
+
+        details = {
+            "decision_id": decision.id,
+            "source_id": source_id,
+            "source_type": source_type,
+            "missing_fields": missing,
+            "mode": mode,
+        }
+        self._audit("governance.validation_failed", details)
+        if mode == "strict":
+            missing_csv = ", ".join(missing)
+            raise ValueError(f"Governance validation failed. Missing fields: {missing_csv}")
 
     def ingest_text(self, source_id: str, text: str, source_type: str = "note", url: str | None = None) -> Decision:
         content_hash = _hash_text(text)
@@ -134,11 +193,30 @@ class DecisionGraphService:
         if existing_evidence:
             linked = self.store.find_decision_by_evidence(existing_evidence.id)
             if linked:
+                self._audit(
+                    "ingest.duplicate",
+                    {
+                        "source_id": source_id,
+                        "source_type": source_type,
+                        "decision_id": linked.id,
+                        "evidence_id": existing_evidence.id,
+                    },
+                )
                 return linked
 
         decision, evidence = self.extractor.extract(text=text, source_type=source_type, source_id=source_id, url=url)
+        self._enforce_governance(decision, source_id=source_id, source_type=source_type)
         evidence.content_hash = content_hash
         self.store.upsert(decision, [evidence])
+        self._audit(
+            "ingest.created",
+            {
+                "source_id": source_id,
+                "source_type": source_type,
+                "decision_id": decision.id,
+                "evidence_id": evidence.id,
+            },
+        )
         return decision
 
     def ingest_directory(self, directory: Path, pattern: str = "*.md", source_type: str = "doc") -> list[Decision]:
@@ -257,6 +335,9 @@ class DecisionGraphService:
     def get_decision(self, decision_id: str) -> Decision | None:
         return self.store.get_decision(decision_id)
 
+    def list_audit_logs(self, limit: int = 100, event_type: str | None = None) -> list[dict[str, Any]]:
+        return self.store.list_audit_logs(limit=limit, event_type=event_type)
+
     def supersede_decision(self, decision_id: str, superseded_decision_id: str) -> Decision:
         decision = self.store.get_decision(decision_id)
         if not decision:
@@ -279,13 +360,223 @@ class DecisionGraphService:
         superseded.updated_at = now
         self.store.upsert(decision, [])
         self.store.upsert(superseded, [])
+        self._audit(
+            "decision.supersede",
+            {
+                "decision_id": decision.id,
+                "superseded_decision_id": superseded.id,
+            },
+        )
         return decision
+
+    @staticmethod
+    def _union_values(*groups: list[str]) -> list[str]:
+        out: list[str] = []
+        seen: set[str] = set()
+        for group in groups:
+            for item in group:
+                value = item.strip()
+                if not value:
+                    continue
+                key = value.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(value)
+        return out
+
+    def merge_decisions(self, primary_decision_id: str, duplicate_decision_id: str, note: str = "") -> Decision:
+        primary = self.store.get_decision(primary_decision_id)
+        if not primary:
+            raise ValueError(f"Decision not found: {primary_decision_id}")
+        duplicate = self.store.get_decision(duplicate_decision_id)
+        if not duplicate:
+            raise ValueError(f"Decision not found: {duplicate_decision_id}")
+        if primary.id == duplicate.id:
+            raise ValueError("Cannot merge the same decision")
+        if duplicate.superseded_by and duplicate.superseded_by != primary.id:
+            raise ValueError(
+                f"Duplicate decision {duplicate.id} is already superseded by {duplicate.superseded_by}"
+            )
+
+        primary.owners = self._union_values(primary.owners, duplicate.owners)
+        primary.alternatives = self._union_values(primary.alternatives, duplicate.alternatives)
+        primary.tradeoffs = self._union_values(primary.tradeoffs, duplicate.tradeoffs)
+        primary.assumptions = self._union_values(primary.assumptions, duplicate.assumptions)
+        primary.risks = self._union_values(primary.risks, duplicate.risks)
+        primary.consequences = self._union_values(primary.consequences, duplicate.consequences)
+        primary.tags = self._union_values(primary.tags, duplicate.tags, ["merged"])
+        primary.evidence_ids = self._union_values(primary.evidence_ids, duplicate.evidence_ids)
+        merged_supersedes = [entry for entry in duplicate.supersedes if entry != primary.id]
+        primary.supersedes = self._union_values(primary.supersedes, merged_supersedes, [duplicate.id])
+        primary.confidence = round(max(primary.confidence, duplicate.confidence), 3)
+        if not primary.component and duplicate.component:
+            primary.component = duplicate.component
+        if not primary.summary and duplicate.summary:
+            primary.summary = duplicate.summary
+        if note.strip():
+            primary.consequences = self._union_values(primary.consequences, [f"Merge note: {note.strip()}"])
+
+        duplicate.superseded_by = primary.id
+        duplicate.tags = self._union_values(duplicate.tags, ["merged-duplicate"])
+        now = utc_now_iso()
+        primary.updated_at = now
+        duplicate.updated_at = now
+
+        self.store.upsert(primary, [])
+        self.store.upsert(duplicate, [])
+
+        # Repoint downstream supersede links from duplicate -> primary.
+        decisions = self.store.list_decisions(limit=10000)
+        for item in decisions:
+            if item.id in {primary.id, duplicate.id}:
+                continue
+            if duplicate.id not in item.supersedes:
+                continue
+            item.supersedes = [primary.id if entry == duplicate.id else entry for entry in item.supersedes]
+            item.supersedes = self._union_values(item.supersedes)
+            item.updated_at = now
+            self.store.upsert(item, [])
+
+        self._audit(
+            "decision.merge",
+            {
+                "primary_decision_id": primary.id,
+                "duplicate_decision_id": duplicate.id,
+                "note": note.strip() or None,
+            },
+        )
+        return primary
+
+    def decision_timeline(
+        self,
+        *,
+        limit: int = 200,
+        component: str | None = None,
+        tag: str | None = None,
+        owner: str | None = None,
+        decision_type: str | None = None,
+        include_superseded: bool = True,
+    ) -> dict[str, Any]:
+        decisions = self.list_decisions(
+            limit=10000,
+            tag=tag,
+            component=component,
+            owner=owner,
+            decision_type=decision_type,
+        )
+        if not include_superseded:
+            decisions = [item for item in decisions if not item.superseded_by]
+
+        def _timeline_sort_key(item: Decision) -> tuple[str, str]:
+            day = (_parse_iso_date(item.date) or date(1970, 1, 1)).isoformat()
+            return (day, item.updated_at)
+
+        ordered = sorted(decisions, key=_timeline_sort_key)[:limit]
+        events: list[dict[str, Any]] = []
+        for idx, item in enumerate(ordered, start=1):
+            events.append(
+                {
+                    "index": idx,
+                    "decision_id": item.id,
+                    "date": item.date,
+                    "title": item.title,
+                    "component": item.component,
+                    "decision_type": item.decision_type,
+                    "owners": item.owners,
+                    "tags": item.tags,
+                    "supersedes": item.supersedes,
+                    "superseded_by": item.superseded_by,
+                }
+            )
+        return {"count": len(events), "items": events}
+
+    def evidence_quality_report(
+        self,
+        *,
+        limit: int = 200,
+        weak_threshold: float = 0.45,
+    ) -> dict[str, Any]:
+        decisions = self.store.list_decisions(limit=10000)[:limit]
+        evidence_map = self.store.get_evidence_map()
+        today = datetime.now(timezone.utc).date()
+        items: list[dict[str, Any]] = []
+        weak_count = 0
+        for item in decisions:
+            linked = [evidence_map[eid] for eid in item.evidence_ids if eid in evidence_map]
+            evidence_count = len(linked)
+            with_url_count = sum(1 for ev in linked if (ev.url or "").strip())
+            evidence_score = min(1.0, evidence_count / 3.0)
+            url_score = (with_url_count / evidence_count) if evidence_count else 0.0
+
+            parsed_date = _parse_iso_date(item.date)
+            if parsed_date is None:
+                recency_score = 0.4
+            else:
+                age_days = max(0, (today - parsed_date).days)
+                if age_days <= 180:
+                    recency_score = 1.0
+                elif age_days <= 365:
+                    recency_score = 0.75
+                elif age_days <= 730:
+                    recency_score = 0.45
+                else:
+                    recency_score = 0.2
+
+            confidence_score = max(0.0, min(1.0, item.confidence))
+            score = round(
+                (0.45 * evidence_score) + (0.2 * url_score) + (0.2 * recency_score) + (0.15 * confidence_score),
+                3,
+            )
+            reasons: list[str] = []
+            if evidence_count == 0:
+                reasons.append("no_evidence")
+            elif evidence_count < 2:
+                reasons.append("low_evidence_count")
+            if url_score < 0.5:
+                reasons.append("low_source_link_coverage")
+            if recency_score <= 0.45:
+                reasons.append("stale_decision_record")
+            if score < weak_threshold:
+                weak_count += 1
+                reasons.append("below_threshold")
+            items.append(
+                {
+                    "decision_id": item.id,
+                    "title": item.title,
+                    "score": score,
+                    "evidence_count": evidence_count,
+                    "with_url_count": with_url_count,
+                    "recency_score": round(recency_score, 3),
+                    "confidence_score": round(confidence_score, 3),
+                    "reasons": reasons,
+                }
+            )
+
+        items.sort(key=lambda row: row["score"])
+        avg_score = round((sum(row["score"] for row in items) / len(items)), 3) if items else 0.0
+        return {
+            "count": len(items),
+            "weak_count": weak_count,
+            "weak_threshold": weak_threshold,
+            "avg_score": avg_score,
+            "items": items,
+        }
 
     def list_metrics(self) -> list[MetricSnapshot]:
         return self.store.list_metrics()
 
     def set_metric(self, key: str, value: float, unit: str | None = None) -> MetricSnapshot:
-        return self.store.set_metric(key=key, value=value, unit=unit)
+        snapshot = self.store.set_metric(key=key, value=value, unit=unit)
+        self._audit(
+            "metric.set",
+            {
+                "key": key,
+                "value": float(value),
+                "unit": unit,
+            },
+        )
+        return snapshot
 
     @staticmethod
     def _watch_key(item: StaleAssumption) -> str:
@@ -318,9 +609,17 @@ class DecisionGraphService:
         critical_severities: list[str] | None = None,
         notify: bool = False,
         webhook_url: str | None = None,
+        notify_target: str = "webhook",
     ) -> dict[str, Any]:
-        if notify and not (webhook_url or "").strip():
-            raise ValueError("webhook_url is required when notify=true")
+        target = notify_target.strip().lower() or "webhook"
+        if target not in ALERT_TARGETS:
+            raise ValueError(f"Invalid notify_target: {notify_target}")
+        resolved_webhook_url = (webhook_url or "").strip() or (alert_webhook_for_target(target) or "")
+        if notify and not resolved_webhook_url:
+            raise ValueError(
+                "webhook_url is required when notify=true "
+                "(or configure connector env for selected notify_target)"
+            )
         warn_on = self._parse_severities(warn_severities, {"medium", "high"})
         critical_on = self._parse_severities(critical_severities, {"high"})
         stale = self.detect_stale_assumptions()
@@ -362,7 +661,7 @@ class DecisionGraphService:
         resolved = sorted(set(previous_state.keys()) - set(stale_map.keys()))
         self.store.set_watch_state({key: item.severity for key, item in stale_map.items()})
 
-        notification_url = (webhook_url or "").strip()
+        notification_url = resolved_webhook_url
         notification_attempted = notify and bool(notification_url)
         notification_sent = False
         notification_error: str | None = None
@@ -375,8 +674,21 @@ class DecisionGraphService:
                     "critical_count": sum(1 for item in alerts if item["level"] == "critical"),
                     "warn_count": sum(1 for item in alerts if item["level"] == "warn"),
                     "alerts": alerts,
+                    "target": target,
                 },
             )
+
+        self._audit(
+            "assumption.watch_run",
+            {
+                "stale_count": len(stale),
+                "alert_count": len(alerts),
+                "resolved_count": len(resolved),
+                "notify": notify,
+                "notify_target": target,
+                "notification_sent": notification_sent,
+            },
+        )
 
         return {
             "stale_count": len(stale),
@@ -390,6 +702,7 @@ class DecisionGraphService:
             "notification": {
                 "attempted": notification_attempted,
                 "sent": notification_sent,
+                "target": target if notification_attempted else None,
                 "url": notification_url if notification_attempted else None,
                 "error": notification_error,
             },

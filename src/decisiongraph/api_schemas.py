@@ -36,10 +36,17 @@ class SupersedeRequest(BaseModel):
     superseded_decision_id: str = Field(min_length=1)
 
 
+class MergeDecisionRequest(BaseModel):
+    primary_decision_id: str = Field(min_length=1)
+    duplicate_decision_id: str = Field(min_length=1)
+    note: str = ""
+
+
 class AssumptionWatchRequest(BaseModel):
     warn_severities: list[str] = Field(default_factory=lambda: ["medium", "high"])
     critical_severities: list[str] = Field(default_factory=lambda: ["high"])
     notify: bool = False
+    notify_target: str = Field(default="webhook", pattern="^(webhook|slack|discord|teams)$")
     webhook_url: str | None = None
 
 

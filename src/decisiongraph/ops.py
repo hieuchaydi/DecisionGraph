@@ -6,11 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from decisiongraph.config import (
+    alert_webhook_for_target,
     api_token,
     cors_origins,
     environment_name,
     github_base_url,
     github_token,
+    governance_mode,
+    governance_required_fields,
     groq_api_key,
     groq_models,
     rate_limit_per_minute,
@@ -75,12 +78,20 @@ def security_audit() -> dict[str, Any]:
         "env": environment_name(),
         "api_token_configured": bool(token),
         "require_token_in_production": require_token_in_production(),
+        "governance_mode": governance_mode(),
+        "governance_required_fields": governance_required_fields(),
         "rate_limit_per_minute": rate_limit_per_minute(),
         "github_token_configured": bool(gh),
         "groq_api_key_configured": bool(groq_key),
         "groq_models": groq_model_list,
         "github_base_url": github_base_url(),
         "cors_origins": cors,
+        "alert_webhooks": {
+            "webhook": bool(alert_webhook_for_target("webhook")),
+            "slack": bool(alert_webhook_for_target("slack")),
+            "discord": bool(alert_webhook_for_target("discord")),
+            "teams": bool(alert_webhook_for_target("teams")),
+        },
         "api_mode": "protected" if token else "open",
     }
 
@@ -94,4 +105,5 @@ def schema_info() -> dict[str, Any]:
         "evidence": len(payload.get("evidence", [])),
         "metrics": len(payload.get("metrics", [])),
         "watch_state": len(payload.get("watch_state", {})),
+        "audit_logs": len(payload.get("audit_logs", [])),
     }

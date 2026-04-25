@@ -17,7 +17,11 @@ def register_ingestion_commands(app: typer.Typer) -> None:
     ) -> None:
         service = build_service()
         text = source.read_text(encoding='utf-8')
-        decision = service.ingest_text(source_id=source_id, text=text, source_type=source_type)
+        try:
+            decision = service.ingest_text(source_id=source_id, text=text, source_type=source_type)
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
         typer.echo(f'Ingested decision: {decision.id} | {decision.title}')
 
     @app.command('ingest-text')
@@ -27,7 +31,11 @@ def register_ingestion_commands(app: typer.Typer) -> None:
         source_type: str = typer.Option('note', help='Source type'),
     ) -> None:
         service = build_service()
-        decision = service.ingest_text(source_id=source_id, text=text, source_type=source_type)
+        try:
+            decision = service.ingest_text(source_id=source_id, text=text, source_type=source_type)
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
         typer.echo(f'Ingested decision: {decision.id} | {decision.title}')
 
     @app.command('ingest-dir')
@@ -37,7 +45,11 @@ def register_ingestion_commands(app: typer.Typer) -> None:
         source_type: str = typer.Option('doc', help='Source type'),
     ) -> None:
         service = build_service()
-        rows = service.ingest_directory(directory=directory, pattern=pattern, source_type=source_type)
+        try:
+            rows = service.ingest_directory(directory=directory, pattern=pattern, source_type=source_type)
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
         typer.echo(f'Ingested {len(rows)} decisions from {directory}')
 
     @app.command('ingest-git')
@@ -47,7 +59,11 @@ def register_ingestion_commands(app: typer.Typer) -> None:
         ref: str = typer.Option('HEAD', help='Git ref (branch/tag/sha)'),
     ) -> None:
         service = build_service()
-        rows = service.ingest_git_history(repo_path=repo, max_commits=max_commits, ref=ref)
+        try:
+            rows = service.ingest_git_history(repo_path=repo, max_commits=max_commits, ref=ref)
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
         typer.echo(f'Ingested {len(rows)} decisions from git history: {repo}')
 
     @app.command('ingest-jsonl')
@@ -56,7 +72,11 @@ def register_ingestion_commands(app: typer.Typer) -> None:
         source_type: str = typer.Option('external', help='Default source type'),
     ) -> None:
         service = build_service()
-        rows = service.ingest_jsonl(path=source, default_source_type=source_type)
+        try:
+            rows = service.ingest_jsonl(path=source, default_source_type=source_type)
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
         typer.echo(f'Ingested {len(rows)} decisions from JSONL: {source}')
 
     @app.command('ingest-github')
@@ -68,15 +88,19 @@ def register_ingestion_commands(app: typer.Typer) -> None:
         state: str = typer.Option('all', help='Issue/PR state: open|closed|all'),
     ) -> None:
         service = build_service()
-        rows = service.ingest_github(
-            owner=owner,
-            repo=repo,
-            max_prs=max_prs,
-            max_issues=max_issues,
-            state=state,
-            token=github_token(),
-            base_url=github_base_url(),
-        )
+        try:
+            rows = service.ingest_github(
+                owner=owner,
+                repo=repo,
+                max_prs=max_prs,
+                max_issues=max_issues,
+                state=state,
+                token=github_token(),
+                base_url=github_base_url(),
+            )
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
         typer.echo(f'Ingested {len(rows)} decisions from GitHub repo: {owner}/{repo}')
 
     @app.command('ingest-slack-export')
@@ -85,7 +109,11 @@ def register_ingestion_commands(app: typer.Typer) -> None:
         max_messages: int = typer.Option(1000, min=1, max=50000, help='Max decision-like messages to ingest'),
     ) -> None:
         service = build_service()
-        rows = service.ingest_slack_export(export_dir=export_dir, max_messages=max_messages)
+        try:
+            rows = service.ingest_slack_export(export_dir=export_dir, max_messages=max_messages)
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
         typer.echo(f'Ingested {len(rows)} decisions from Slack export: {export_dir}')
 
     @app.command('ingest-jira-json')
@@ -93,5 +121,9 @@ def register_ingestion_commands(app: typer.Typer) -> None:
         source: Path = typer.Option(..., exists=True, file_okay=True, dir_okay=False, help='Jira export JSON path'),
     ) -> None:
         service = build_service()
-        rows = service.ingest_jira_json(path=source)
+        try:
+            rows = service.ingest_jira_json(path=source)
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
         typer.echo(f'Ingested {len(rows)} decisions from Jira JSON: {source}')

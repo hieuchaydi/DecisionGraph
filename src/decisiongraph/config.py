@@ -71,6 +71,34 @@ def auto_seed_demo() -> bool:
     return _env_bool("DECISIONGRAPH_AUTO_SEED_DEMO", False)
 
 
+def governance_mode() -> str:
+    mode = os.getenv("DECISIONGRAPH_GOVERNANCE_MODE", "off").strip().lower()
+    if mode not in {"off", "warn", "strict"}:
+        return "off"
+    return mode
+
+
+def governance_required_fields() -> list[str]:
+    raw = os.getenv("DECISIONGRAPH_GOVERNANCE_REQUIRED_FIELDS", "owners,assumptions,risks").strip()
+    if not raw:
+        return ["owners", "assumptions", "risks"]
+    fields = [item.strip().lower() for item in raw.split(",") if item.strip()]
+    return fields or ["owners", "assumptions", "risks"]
+
+
+def alert_webhook_for_target(target: str) -> str | None:
+    normalized = target.strip().lower()
+    if normalized == "slack":
+        return os.getenv("DECISIONGRAPH_ALERT_SLACK_WEBHOOK", "").strip() or None
+    if normalized == "discord":
+        return os.getenv("DECISIONGRAPH_ALERT_DISCORD_WEBHOOK", "").strip() or None
+    if normalized == "teams":
+        return os.getenv("DECISIONGRAPH_ALERT_TEAMS_WEBHOOK", "").strip() or None
+    if normalized == "webhook":
+        return os.getenv("DECISIONGRAPH_ALERT_WEBHOOK_URL", "").strip() or None
+    return None
+
+
 def validate_runtime_configuration() -> None:
     env = environment_name().lower()
     if env == "production" and require_token_in_production() and not api_token():

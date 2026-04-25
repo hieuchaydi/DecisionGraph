@@ -224,3 +224,83 @@ def test_run_assumption_watch_requires_webhook_for_notify(tmp_path: Path) -> Non
     svc.seed_demo()
     with pytest.raises(ValueError):
         svc.run_assumption_watch(notify=True)
+    with pytest.raises(ValueError):
+        svc.run_assumption_watch(notify_target="pagerduty")
+
+
+def test_merge_decisions_combines_evidence_and_marks_duplicate(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    svc.seed_demo()
+    first = svc.ingest_text(
+        source_id="rfc-merge-1",
+        source_type="rfc",
+        text=(
+            "Title: Adopt dedicated cache cluster\n"
+            "Summary: reduce noisy-neighbor impact on shared cache\n"
+            "Owner: Platform\n"
+            "Assumption: cache_hit_ratio > 0.90\n"
+            "Risk: migration overhead"
+        ),
+    )
+    second = svc.ingest_text(
+        source_id="rfc-merge-2",
+        source_type="rfc",
+        text=(
+            "Title: Adopt dedicated cache cluster for workloads\n"
+            "Summary: same direction with extra evidence\n"
+            "Owner: SRE\n"
+            "Assumption: cache_hit_ratio > 0.90\n"
+            "Risk: operational complexity"
+        ),
+    )
+
+    merged = svc.merge_decisions(first.id, second.id, note="deduplicate duplicate RFCs")
+    duplicate = svc.get_decision(second.id)
+    assert duplicate is not None
+    assert duplicate.superseded_by == merged.id
+    assert second.id in merged.supersedes
+    assert len(merged.evidence_ids) >= 2
+
+
+def test_decision_timeline_and_evidence_quality(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    svc.seed_demo()
+    timeline = svc.decision_timeline(limit=10, tag="payments")
+    assert timeline["count"] >= 1
+    assert all("payments" in [tag.lower() for tag in item["tags"]] for item in timeline["items"])
+
+    quality = svc.evidence_quality_report(limit=20, weak_threshold=0.6)
+    assert quality["count"] >= 4
+    assert "avg_score" in quality
+
+
+def test_governance_strict_blocks_ingest(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("DECISIONGRAPH_GOVERNANCE_MODE", "strict")
+    monkeypatch.setenv("DECISIONGRAPH_GOVERNANCE_REQUIRED_FIELDS", "owners,assumptions,risks")
+    svc = _service(tmp_path)
+    with pytest.raises(ValueError):
+        svc.ingest_text(
+            source_id="gov-strict-1",
+            source_type="note",
+            text="Title: Loose note without required governance fields\nSummary: no owner/assumption/risk lines",
+        )
+
+
+def test_audit_logs_record_events(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    svc.seed_demo()
+    svc.set_metric("queue_volume", 123.0, "events/day")
+    logs = svc.list_audit_logs(limit=20)
+    assert logs
+    assert any(item["event"] == "metric.set" for item in logs)
+
+
+def test_watch_assumption_uses_connector_target_env(tmp_path: Path, monkeypatch) -> None:
+    svc = _service(tmp_path)
+    svc.seed_demo()
+    monkeypatch.setenv("DECISIONGRAPH_ALERT_SLACK_WEBHOOK", "https://hooks.slack.local/test")
+    monkeypatch.setattr(svc, "_dispatch_watch_notification", lambda webhook_url, payload: (True, None))
+    out = svc.run_assumption_watch(notify=True, notify_target="slack")
+    assert out["notification"]["attempted"] is True
+    assert out["notification"]["sent"] is True
+    assert out["notification"]["target"] == "slack"

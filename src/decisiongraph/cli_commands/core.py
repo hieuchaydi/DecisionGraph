@@ -16,11 +16,15 @@ CHAT_HELP = """Commands:
   /list [limit]                      List latest decisions
   /find <query>                      Search decisions by text
   /supersede <new_id> <old_id>       Mark one decision as superseding another
+  /merge <primary_id> <duplicate_id> Merge duplicate decision into primary
+  /timeline [limit]                  Show chronological decision timeline
+  /quality                           Show evidence quality report
   /get <decision_id>                 Show one decision as JSON
   /guard <change request>            Run guardrail check
   /contradictions                    Show detected contradictions
   /stale                             Show stale assumptions
   /watch                             Run assumption watcher (warn/critical transitions)
+  /audit [limit]                     Show audit events
   /metrics                           Show metric snapshots
   /graph                             Show graph node/edge counts
   /report [json|markdown]            Show summary report
@@ -99,6 +103,34 @@ def process_chat_turn(
                 return False, [str(exc)]
             return False, [f"Supersede link updated: {row.id} supersedes {superseded_decision_id}"]
 
+        if cmd == "/merge":
+            parts = arg.split()
+            if len(parts) != 2:
+                return False, ["Usage: /merge <primary_id> <duplicate_id>"]
+            primary_decision_id, duplicate_decision_id = parts
+            try:
+                row = service.merge_decisions(
+                    primary_decision_id=primary_decision_id,
+                    duplicate_decision_id=duplicate_decision_id,
+                )
+            except ValueError as exc:
+                return False, [str(exc)]
+            return False, [f"Merge completed: primary={row.id} duplicate={duplicate_decision_id}"]
+
+        if cmd == "/timeline":
+            limit = 20
+            if arg:
+                try:
+                    limit = int(arg)
+                except ValueError:
+                    return False, [f"Invalid limit: {arg}"]
+            payload = service.decision_timeline(limit=limit)
+            return False, [json.dumps(payload, indent=2)]
+
+        if cmd == "/quality":
+            payload = service.evidence_quality_report(limit=50)
+            return False, [json.dumps(payload, indent=2)]
+
         if cmd == "/get":
             if not arg:
                 return False, ["Usage: /get <decision_id>"]
@@ -124,6 +156,16 @@ def process_chat_turn(
         if cmd == "/watch":
             payload = service.run_assumption_watch()
             return False, [json.dumps(payload, indent=2)]
+
+        if cmd == "/audit":
+            limit = 20
+            if arg:
+                try:
+                    limit = int(arg)
+                except ValueError:
+                    return False, [f"Invalid limit: {arg}"]
+            rows = service.list_audit_logs(limit=limit)
+            return False, [json.dumps(rows, indent=2)]
 
         if cmd == "/metrics":
             rows = [item.to_dict() for item in service.list_metrics()]
@@ -245,6 +287,48 @@ def register_core_commands(app: typer.Typer) -> None:
             raise typer.Exit(code=1) from exc
         echo_json({"status": "ok", "decision": row.to_dict()})
 
+    @app.command("merge")
+    def merge_decisions(primary_decision_id: str, duplicate_decision_id: str, note: str = "") -> None:
+        service = build_service()
+        try:
+            row = service.merge_decisions(
+                primary_decision_id=primary_decision_id,
+                duplicate_decision_id=duplicate_decision_id,
+                note=note,
+            )
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
+        echo_json({"status": "ok", "decision": row.to_dict()})
+
+    @app.command("timeline")
+    def timeline(
+        limit: int = typer.Option(200, min=1, max=5000),
+        component: str = typer.Option("", help="Component filter"),
+        tag: str = typer.Option("", help="Tag filter"),
+        owner: str = typer.Option("", help="Owner filter"),
+        decision_type: str = typer.Option("", help="Decision type filter"),
+        include_superseded: bool = typer.Option(True, "--include-superseded/--exclude-superseded"),
+    ) -> None:
+        service = build_service()
+        payload = service.decision_timeline(
+            limit=limit,
+            component=component or None,
+            tag=tag or None,
+            owner=owner or None,
+            decision_type=decision_type or None,
+            include_superseded=include_superseded,
+        )
+        echo_json(payload)
+
+    @app.command("evidence-quality")
+    def evidence_quality(
+        limit: int = typer.Option(200, min=1, max=5000),
+        weak_threshold: float = typer.Option(0.45, min=0.0, max=1.0),
+    ) -> None:
+        service = build_service()
+        echo_json(service.evidence_quality_report(limit=limit, weak_threshold=weak_threshold))
+
     @app.command("guardrail")
     def guardrail(change_request: str, limit: int = typer.Option(3, min=1, max=10)) -> None:
         service = build_service()
@@ -268,6 +352,7 @@ def register_core_commands(app: typer.Typer) -> None:
         warn: str = typer.Option("medium,high", help="Warn severities (comma-separated)"),
         critical: str = typer.Option("high", help="Critical severities (comma-separated)"),
         notify: bool = typer.Option(False, help="Send webhook notification for new/escalated alerts"),
+        notify_target: str = typer.Option("webhook", help="Notification target: webhook|slack|discord|teams"),
         webhook_url: str = typer.Option("", help="Webhook URL (required when --notify)"),
     ) -> None:
         service = build_service()
@@ -278,12 +363,22 @@ def register_core_commands(app: typer.Typer) -> None:
                 warn_severities=warn_values,
                 critical_severities=critical_values,
                 notify=notify,
+                notify_target=notify_target,
                 webhook_url=webhook_url or None,
             )
         except ValueError as exc:
             typer.echo(str(exc))
             raise typer.Exit(code=1) from exc
         echo_json(payload)
+
+    @app.command("audit-log")
+    def audit_log(
+        limit: int = typer.Option(100, min=1, max=5000),
+        event: str = typer.Option("", help="Optional event filter"),
+    ) -> None:
+        service = build_service()
+        rows = service.list_audit_logs(limit=limit, event_type=event or None)
+        echo_json(rows)
 
     @app.command("metric-set")
     def metric_set(

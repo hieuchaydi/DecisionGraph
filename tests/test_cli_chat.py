@@ -69,6 +69,33 @@ def test_chat_turn_watch(tmp_path: Path) -> None:
     assert '"alerts"' in lines[0]
 
 
+def test_chat_turn_merge_timeline_quality_and_audit(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    first = svc.ingest_text(
+        source_id="chat-merge-1",
+        source_type="rfc",
+        text="Title: Dedup cache decision\nSummary: first copy\nOwner: Platform\nAssumption: cache_hit_ratio > 0.9\nRisk: migration",
+    )
+    second = svc.ingest_text(
+        source_id="chat-merge-2",
+        source_type="rfc",
+        text="Title: Dedup cache decision alt\nSummary: second copy\nOwner: SRE\nAssumption: cache_hit_ratio > 0.9\nRisk: complexity",
+    )
+
+    should_exit, lines = process_chat_turn(svc, f"/merge {first.id} {second.id}")
+    assert should_exit is False
+    assert "Merge completed" in lines[0]
+
+    _, timeline_lines = process_chat_turn(svc, "/timeline 5")
+    assert '"items"' in timeline_lines[0]
+
+    _, quality_lines = process_chat_turn(svc, "/quality")
+    assert '"avg_score"' in quality_lines[0]
+
+    _, audit_lines = process_chat_turn(svc, "/audit 5")
+    assert '"event"' in audit_lines[0]
+
+
 def test_chat_turn_exit(tmp_path: Path) -> None:
     svc = _service(tmp_path)
     should_exit, lines = process_chat_turn(svc, "/exit")

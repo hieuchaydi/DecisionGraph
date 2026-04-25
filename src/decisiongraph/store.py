@@ -27,7 +27,14 @@ class DecisionStore:
 
     @staticmethod
     def _empty_payload() -> dict[str, Any]:
-        return {"schema_version": 3, "decisions": [], "evidence": [], "metrics": [], "watch_state": {}}
+        return {
+            "schema_version": 4,
+            "decisions": [],
+            "evidence": [],
+            "metrics": [],
+            "watch_state": {},
+            "audit_logs": [],
+        }
 
     @contextmanager
     def _exclusive_lock(self) -> Iterator[None]:
@@ -89,6 +96,11 @@ class DecisionStore:
             }
         else:
             normalized["watch_state"] = {}
+        raw_audit_logs = data.get("audit_logs", [])
+        if isinstance(raw_audit_logs, list):
+            normalized["audit_logs"] = [entry for entry in raw_audit_logs if isinstance(entry, dict)]
+        else:
+            normalized["audit_logs"] = []
         return normalized
 
     def _read(self) -> dict[str, Any]:
@@ -208,4 +220,21 @@ class DecisionStore:
         with self._exclusive_lock():
             data = self._read()
             data["watch_state"] = {str(key): str(value) for key, value in state.items()}
+            self._write(data)
+
+    def list_audit_logs(self, limit: int = 100, event_type: str | None = None) -> list[dict[str, Any]]:
+        data = self._read()
+        rows = [dict(item) for item in data.get("audit_logs", []) if isinstance(item, dict)]
+        if event_type:
+            normalized = event_type.strip().lower()
+            rows = [item for item in rows if str(item.get("event", "")).lower() == normalized]
+        rows.sort(key=lambda item: str(item.get("ts", "")), reverse=True)
+        return rows[:limit]
+
+    def append_audit_log(self, entry: dict[str, Any]) -> None:
+        with self._exclusive_lock():
+            data = self._read()
+            logs = [item for item in data.get("audit_logs", []) if isinstance(item, dict)]
+            logs.append(dict(entry))
+            data["audit_logs"] = logs[-5000:]
             self._write(data)

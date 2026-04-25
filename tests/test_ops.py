@@ -10,6 +10,8 @@ def test_ops_doctor_and_security() -> None:
     assert "checks" in d
     s = security_audit()
     assert "api_mode" in s
+    assert "governance_mode" in s
+    assert "alert_webhooks" in s
 
 
 def test_ops_runbook_and_release_check(tmp_path: Path) -> None:
@@ -24,4 +26,4 @@ def test_ops_runbook_and_release_check(tmp_path: Path) -> None:
 def test_schema_info() -> None:
     out = schema_info()
     assert "schema_version" in out
-
+    assert "audit_logs" in out

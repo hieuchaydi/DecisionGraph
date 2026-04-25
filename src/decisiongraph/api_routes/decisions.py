@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from decisiongraph.api_schemas import (
     AssumptionWatchRequest,
     GuardrailRequest,
+    MergeDecisionRequest,
     MetricUpsertRequest,
     QueryRequest,
     SupersedeRequest,
@@ -37,13 +38,6 @@ def create_decision_router(service: DecisionGraphService) -> APIRouter:
         ]
         return {'count': len(rows), 'items': rows}
 
-    @router.get('/api/decisions/{decision_id}')
-    def get_decision(decision_id: str) -> dict[str, object]:
-        row = service.get_decision(decision_id)
-        if not row:
-            raise HTTPException(status_code=404, detail='Decision not found')
-        return row.to_dict()
-
     @router.post('/api/decisions/supersede')
     def supersede(payload: SupersedeRequest) -> dict[str, object]:
         try:
@@ -54,6 +48,47 @@ def create_decision_router(service: DecisionGraphService) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {'status': 'ok', 'decision': row.to_dict()}
+
+    @router.post('/api/decisions/merge')
+    def merge_decision(payload: MergeDecisionRequest) -> dict[str, object]:
+        try:
+            row = service.merge_decisions(
+                primary_decision_id=payload.primary_decision_id,
+                duplicate_decision_id=payload.duplicate_decision_id,
+                note=payload.note,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {'status': 'ok', 'decision': row.to_dict()}
+
+    @router.get('/api/decisions/timeline')
+    def decision_timeline(
+        limit: int = 200,
+        component: str | None = None,
+        tag: str | None = None,
+        owner: str | None = None,
+        decision_type: str | None = None,
+        include_superseded: bool = True,
+    ) -> dict[str, object]:
+        return service.decision_timeline(
+            limit=limit,
+            component=component,
+            tag=tag,
+            owner=owner,
+            decision_type=decision_type,
+            include_superseded=include_superseded,
+        )
+
+    @router.get('/api/decisions/evidence-quality')
+    def evidence_quality(limit: int = 200, weak_threshold: float = 0.45) -> dict[str, object]:
+        return service.evidence_quality_report(limit=limit, weak_threshold=weak_threshold)
+
+    @router.get('/api/decisions/{decision_id}')
+    def get_decision(decision_id: str) -> dict[str, object]:
+        row = service.get_decision(decision_id)
+        if not row:
+            raise HTTPException(status_code=404, detail='Decision not found')
+        return row.to_dict()
 
     @router.post('/api/query')
     def query(payload: QueryRequest) -> dict[str, object]:
@@ -80,10 +115,16 @@ def create_decision_router(service: DecisionGraphService) -> APIRouter:
                 warn_severities=payload.warn_severities,
                 critical_severities=payload.critical_severities,
                 notify=payload.notify,
+                notify_target=payload.notify_target,
                 webhook_url=payload.webhook_url,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get('/api/audit/logs')
+    def audit_logs(limit: int = 100, event: str | None = None) -> dict[str, object]:
+        rows = service.list_audit_logs(limit=limit, event_type=event)
+        return {'count': len(rows), 'items': rows}
 
     @router.get('/api/metrics')
     def list_metrics() -> dict[str, object]:
