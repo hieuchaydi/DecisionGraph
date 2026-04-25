@@ -258,15 +258,17 @@ export function ReadinessConsole({ locale }: { locale: Locale }) {
           </div>
           {results.map((result) => (
             <div className="readiness-row" role="row" key={result.id}>
-              <span>{result.label}</span>
-              <span className="endpoint">{result.method} {result.path}</span>
-              <span>
+              <span data-label={locale === 'vi' ? 'Check' : 'Check'}>{result.label}</span>
+              <span data-label={locale === 'vi' ? 'Endpoint' : 'Endpoint'} className="endpoint">
+                {result.method} {result.path}
+              </span>
+              <span data-label={locale === 'vi' ? 'Kết quả' : 'Result'}>
                 <em data-state={result.status} className="status-badge">
                   {result.status === 'pass' ? 'PASS' : 'FAIL'} ({result.code})
                 </em>
                 <small>{result.detail}</small>
               </span>
-              <span>{result.latencyMs}ms</span>
+              <span data-label={locale === 'vi' ? 'Latency' : 'Latency'}>{result.latencyMs}ms</span>
             </div>
           ))}
         </div>
