@@ -46,7 +46,7 @@ DecisionGraph keeps that reasoning traceable with evidence so teams can move fas
 python -m pip install -e ".[dev]"
 decisiongraph init --reset
 decisiongraph seed-demo
-decisiongraph serve --host 127.0.0.1 --port 8000
+decisiongraph serve --host 127.0.0.1 --port 8000 --seed-demo
 ```
 
 Quickstart demo:
@@ -154,6 +154,7 @@ Key variables:
 - `DECISIONGRAPH_DATA_PATH=data/decisiongraph.json`
 - `DECISIONGRAPH_API_TOKEN` optional API key (`x-api-key` header)
 - `DECISIONGRAPH_REQUIRE_TOKEN_IN_PRODUCTION=true` blocks startup in production without token
+- `DECISIONGRAPH_AUTO_SEED_DEMO=false` auto seed demo data at `decisiongraph serve` startup
 - `DECISIONGRAPH_RATE_LIMIT_PER_MINUTE=240` per-client rate limit (`0` disables)
 - `DECISIONGRAPH_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:5173`
 - `DECISIONGRAPH_GITHUB_TOKEN` for GitHub ingestion
@@ -193,9 +194,16 @@ curl -X POST http://127.0.0.1:8000/api/guardrail \
 curl http://127.0.0.1:8000/api/assumptions/stale
 ```
 
+5. Search decisions with filters:
+```bash
+curl "http://127.0.0.1:8000/api/decisions?limit=10&q=rabbitmq&tag=queues"
+curl "http://127.0.0.1:8000/api/decisions?owner=finance&decision_type=risk-policy"
+```
+
 ## API Surface (Main Endpoints)
 
 ### System
+- `GET /`
 - `GET /health`
 - `GET /api/report/summary?format=json|markdown`
 
@@ -251,6 +259,10 @@ curl http://127.0.0.1:8000/api/assumptions/stale
 - `decisiongraph metrics`
 - `decisiongraph graph`
 - `decisiongraph report --format markdown|json [--output ...]`
+
+### Runtime
+- `decisiongraph serve [--host 127.0.0.1] [--port 8000] [--seed-demo|--no-seed-demo]`
+- `decisiongraph mcp`
 
 ### Ingestion
 - `decisiongraph ingest --source <file> --source-id <id> [--source-type note]`
