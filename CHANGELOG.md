@@ -13,6 +13,7 @@ All notable changes to DecisionGraph are documented in this file.
 - Audit log events and retrieval endpoints/commands/tools.
 - Connector-aware watcher notifications via `webhook`, `slack`, `discord`, and `teams`.
 - CLI command-level test coverage for newly added commands.
+- CLI compatibility aliases: `find`, `quality`, `watch`, and `audit`.
 
 ### Changed
 - Store schema updated to support `watch_state` and `audit_logs`.

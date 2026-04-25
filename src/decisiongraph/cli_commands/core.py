@@ -265,6 +265,27 @@ def register_core_commands(app: typer.Typer) -> None:
         for line in _render_list(rows):
             typer.echo(line)
 
+    @app.command("find")
+    def find_decisions(
+        query: str = typer.Argument(..., help="Search query text"),
+        limit: int = typer.Option(20, min=1, max=200),
+        tag: str = typer.Option("", help="Tag filter (comma-separated)"),
+        component: str = typer.Option("", help="Component filter"),
+        owner: str = typer.Option("", help="Owner filter"),
+        decision_type: str = typer.Option("", help="Decision type filter"),
+    ) -> None:
+        service = build_service()
+        rows = service.list_decisions(
+            limit=limit,
+            query=query,
+            tag=tag or None,
+            component=component or None,
+            owner=owner or None,
+            decision_type=decision_type or None,
+        )
+        for line in _render_list(rows):
+            typer.echo(line)
+
     @app.command("get")
     def get_decision(decision_id: str) -> None:
         service = build_service()
@@ -329,6 +350,14 @@ def register_core_commands(app: typer.Typer) -> None:
         service = build_service()
         echo_json(service.evidence_quality_report(limit=limit, weak_threshold=weak_threshold))
 
+    @app.command("quality")
+    def evidence_quality_alias(
+        limit: int = typer.Option(200, min=1, max=5000),
+        weak_threshold: float = typer.Option(0.45, min=0.0, max=1.0),
+    ) -> None:
+        service = build_service()
+        echo_json(service.evidence_quality_report(limit=limit, weak_threshold=weak_threshold))
+
     @app.command("guardrail")
     def guardrail(change_request: str, limit: int = typer.Option(3, min=1, max=10)) -> None:
         service = build_service()
@@ -371,8 +400,41 @@ def register_core_commands(app: typer.Typer) -> None:
             raise typer.Exit(code=1) from exc
         echo_json(payload)
 
+    @app.command("watch")
+    def watch_assumptions_alias(
+        warn: str = typer.Option("medium,high", help="Warn severities (comma-separated)"),
+        critical: str = typer.Option("high", help="Critical severities (comma-separated)"),
+        notify: bool = typer.Option(False, help="Send webhook notification for new/escalated alerts"),
+        notify_target: str = typer.Option("webhook", help="Notification target: webhook|slack|discord|teams"),
+        webhook_url: str = typer.Option("", help="Webhook URL (required when --notify)"),
+    ) -> None:
+        service = build_service()
+        warn_values = [entry.strip() for entry in warn.split(",") if entry.strip()]
+        critical_values = [entry.strip() for entry in critical.split(",") if entry.strip()]
+        try:
+            payload = service.run_assumption_watch(
+                warn_severities=warn_values,
+                critical_severities=critical_values,
+                notify=notify,
+                notify_target=notify_target,
+                webhook_url=webhook_url or None,
+            )
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
+        echo_json(payload)
+
     @app.command("audit-log")
     def audit_log(
+        limit: int = typer.Option(100, min=1, max=5000),
+        event: str = typer.Option("", help="Optional event filter"),
+    ) -> None:
+        service = build_service()
+        rows = service.list_audit_logs(limit=limit, event_type=event or None)
+        echo_json(rows)
+
+    @app.command("audit")
+    def audit_log_alias(
         limit: int = typer.Option(100, min=1, max=5000),
         event: str = typer.Option("", help="Optional event filter"),
     ) -> None:

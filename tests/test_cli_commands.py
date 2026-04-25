@@ -77,6 +77,22 @@ def test_cli_merge_timeline_quality_and_audit(tmp_path: Path, monkeypatch) -> No
     assert audit.exit_code == 0
     assert '"event"' in audit.stdout
 
+    # alias commands should remain functional
+    find = runner.invoke(app, ["find", "cache", "--limit", "20"])
+    assert find.exit_code == 0
+
+    quality_alias = runner.invoke(app, ["quality", "--limit", "20", "--weak-threshold", "0.6"])
+    assert quality_alias.exit_code == 0
+    assert '"avg_score"' in quality_alias.stdout
+
+    audit_alias = runner.invoke(app, ["audit", "--limit", "20"])
+    assert audit_alias.exit_code == 0
+    assert '"event"' in audit_alias.stdout
+
+    watch_alias = runner.invoke(app, ["watch"])
+    assert watch_alias.exit_code == 0
+    assert '"stale_count"' in watch_alias.stdout
+
 
 def test_cli_watch_assumptions_invalid_notify_target(tmp_path: Path, monkeypatch) -> None:
     runner = _runner()

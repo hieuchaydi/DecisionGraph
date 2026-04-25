@@ -124,14 +124,18 @@ Non-interactive CLI equivalents:
 ```bash
 decisiongraph list
 decisiongraph list --q "rabbitmq" --tag queues
+decisiongraph find "rabbitmq" --tag queues
 decisiongraph list --owner finance --decision-type risk-policy
 decisiongraph query "Why did we cap payment retries at 2?"
 decisiongraph supersede <new_decision_id> <old_decision_id>
 decisiongraph merge <primary_decision_id> <duplicate_decision_id> --note "dedupe"
 decisiongraph timeline --component payment-retry --exclude-superseded
 decisiongraph evidence-quality --weak-threshold 0.5
+decisiongraph quality --weak-threshold 0.5
 decisiongraph watch-assumptions --notify --notify-target slack
+decisiongraph watch
 decisiongraph audit-log --limit 100 --event assumption.watch_run
+decisiongraph audit --limit 100 --event assumption.watch_run
 decisiongraph guardrail "Increase retry attempts in payment flow"
 ```
 
@@ -301,17 +305,21 @@ curl -X POST http://127.0.0.1:8000/api/assumptions/watch \
 - `decisiongraph seed-demo`
 - `decisiongraph chat [--list-limit 20] [--guardrail-limit 3]`
 - `decisiongraph list --limit 20 [--q ...] [--tag ...] [--component ...] [--owner ...] [--decision-type ...]`
+- `decisiongraph find <query> [--limit ...] [--tag ...] [--component ...] [--owner ...] [--decision-type ...]` (alias of search/list)
 - `decisiongraph get <decision_id>`
 - `decisiongraph supersede <decision_id> <superseded_decision_id>`
 - `decisiongraph merge <primary_decision_id> <duplicate_decision_id> [--note ...]`
 - `decisiongraph timeline [--limit 200] [--component ...] [--tag ...] [--owner ...] [--decision-type ...] [--exclude-superseded]`
 - `decisiongraph evidence-quality [--limit 200] [--weak-threshold 0.45]`
+- `decisiongraph quality [--limit 200] [--weak-threshold 0.45]` (alias)
 - `decisiongraph query "..."`
 - `decisiongraph guardrail "..."`
 - `decisiongraph contradictions`
 - `decisiongraph stale-assumptions`
 - `decisiongraph watch-assumptions [--warn medium,high] [--critical high] [--notify --notify-target slack --webhook-url ...]`
+- `decisiongraph watch [--warn medium,high] [--critical high] [--notify --notify-target ...]` (alias)
 - `decisiongraph audit-log [--limit 100] [--event ...]`
+- `decisiongraph audit [--limit 100] [--event ...]` (alias)
 - `decisiongraph metric-set --key ... --value ... [--unit ...]`
 - `decisiongraph metrics`
 - `decisiongraph graph`
