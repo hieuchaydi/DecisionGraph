@@ -28,6 +28,7 @@ jobs:
         run: python -m pytest -q
 
   frontend:
+    if: ${{ hashFiles('docs/package.json') != '' && hashFiles('docs/package-lock.json') != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
