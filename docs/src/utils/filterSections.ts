@@ -9,6 +9,8 @@ function toSearchText(section: DocSection): string {
     ...(section.bullets?.vi ?? []),
     ...(section.bullets?.en ?? []),
     section.code ?? '',
+    section.codeLocalized?.vi ?? '',
+    section.codeLocalized?.en ?? '',
   ]
     .join(' ')
     .toLowerCase()

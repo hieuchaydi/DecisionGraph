@@ -10,4 +10,5 @@ export type DocSection = {
   summary?: Localized
   bullets?: LocalizedList
   code?: string
+  codeLocalized?: Localized
 }

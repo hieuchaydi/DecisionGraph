@@ -7,7 +7,6 @@
 - **Live Readiness Console** ngay trong docs UI:
   - Chạy check thật vào API (`/health`, `/api/decisions`, `/api/query`, `/api/guardrail`, `/api/schema/info`).
   - Đo latency từng check + tính readiness score tổng thể.
-  - Hỗ trợ `x-api-key` để test môi trường protected.
   - Hiển thị lỗi chi tiết để debug nhanh khi demo/release check.
 
 ### Docs scope (đã mở rộng)
@@ -30,9 +29,20 @@ npm install
 npm run dev
 ```
 
+### CLI nhanh cho Windows CMD
+```cmd
+py -m pip install -e ".[dev]"
+decisiongraph init --reset
+decisiongraph seed-demo
+decisiongraph chat
+```
+
 ### Backend `.env` setup (khuyến nghị)
 ```powershell
 Copy-Item ..\.env.example ..\.env
+```
+```cmd
+copy ..\.env.example ..\.env
 ```
 Sau đó chỉnh `..\.env` (không commit secret):
 - `DECISIONGRAPH_ENV`
@@ -56,7 +66,6 @@ This is the documentation frontend for DecisionGraph (React + TypeScript + Vite)
 - **Live Readiness Console** inside the docs UI:
   - Runs real checks against API endpoints (`/health`, `/api/decisions`, `/api/query`, `/api/guardrail`, `/api/schema/info`).
   - Measures per-check latency and computes an overall readiness score.
-  - Supports `x-api-key` for protected environments.
   - Surfaces failure details for faster demo/release troubleshooting.
 
 ### Expanded docs scope
@@ -79,9 +88,20 @@ npm install
 npm run dev
 ```
 
+### CLI quickstart for Windows CMD
+```cmd
+py -m pip install -e ".[dev]"
+decisiongraph init --reset
+decisiongraph seed-demo
+decisiongraph chat
+```
+
 ### Recommended backend `.env` setup
 ```bash
 cp ../.env.example ../.env
+```
+```cmd
+copy ..\.env.example ..\.env
 ```
 Then edit `../.env` (do not commit real secrets):
 - `DECISIONGRAPH_ENV`

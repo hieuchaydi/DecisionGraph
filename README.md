@@ -97,6 +97,14 @@ decisiongraph seed-demo
 decisiongraph chat
 ```
 
+Windows Command Prompt (`cmd`):
+```cmd
+py -m pip install -e ".[dev]"
+decisiongraph init --reset
+decisiongraph seed-demo
+decisiongraph chat
+```
+
 Inside chat, ask questions directly or use commands:
 
 ```text
@@ -169,6 +177,12 @@ Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
+```
+
+Windows Command Prompt (`cmd`):
+
+```cmd
+copy .env.example .env
 ```
 
 Key variables:

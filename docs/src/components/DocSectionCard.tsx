@@ -6,6 +6,8 @@ type DocSectionCardProps = {
 }
 
 export function DocSectionCard({ locale, section }: DocSectionCardProps) {
+  const code = section.codeLocalized?.[locale] ?? section.code
+
   return (
     <section id={section.id} className="card">
       <h2>{section.title[locale]}</h2>
@@ -17,9 +19,9 @@ export function DocSectionCard({ locale, section }: DocSectionCardProps) {
           ))}
         </ul>
       ) : null}
-      {section.code ? (
+      {code ? (
         <pre>
-          <code>{section.code}</code>
+          <code>{code}</code>
         </pre>
       ) : null}
     </section>

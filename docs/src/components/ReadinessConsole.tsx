@@ -87,7 +87,6 @@ export function ReadinessConsole({ locale }: { locale: Locale }) {
     if (typeof window === 'undefined') return 'http://127.0.0.1:8000'
     return localStorage.getItem(BASE_URL_STORAGE_KEY) ?? 'http://127.0.0.1:8000'
   })
-  const [apiKey, setApiKey] = useState('')
   const [isRunning, setIsRunning] = useState(false)
   const [lastRunAt, setLastRunAt] = useState<string | null>(null)
   const [results, setResults] = useState<CheckResult[]>([])
@@ -123,10 +122,6 @@ export function ReadinessConsole({ locale }: { locale: Locale }) {
 
         if (check.method === 'POST') {
           headers['Content-Type'] = 'application/json'
-        }
-
-        if (apiKey.trim()) {
-          headers['x-api-key'] = apiKey.trim()
         }
 
         const response = await fetch(`${normalizedBaseUrl}${check.path}`, {
@@ -219,16 +214,6 @@ export function ReadinessConsole({ locale }: { locale: Locale }) {
             value={baseUrl}
             onChange={(event) => setBaseUrl(event.target.value)}
             placeholder="http://127.0.0.1:8000"
-            autoComplete="off"
-          />
-        </label>
-
-        <label>
-          <span>{locale === 'vi' ? 'API Key (tuỳ chọn)' : 'API Key (optional)'}</span>
-          <input
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder="x-api-key"
             autoComplete="off"
           />
         </label>
