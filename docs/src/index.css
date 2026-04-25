@@ -1,13 +1,41 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&family=Sora:wght@600;700&display=swap');
 
 :root {
-  --dg-bg: #f3f7f3;
-  --dg-surface: #edf5ec;
-  --dg-soft: #e5efe3;
-  --dg-ink: #132115;
-  --dg-muted: #4f6758;
-  --dg-border: #cdddcf;
-  --dg-accent: #008060;
+  --dg-bg: #f5f1e8;
+  --dg-bg-alt: #ece3d2;
+  --dg-surface: #fffdf7;
+  --dg-panel: #f6eddc;
+  --dg-soft: #eee2ce;
+  --dg-ink: #1f1910;
+  --dg-muted: #6b5d49;
+  --dg-border: #dbc9ad;
+  --dg-accent: #ba5a1d;
+  --dg-accent-soft: #ffe2cf;
+  --dg-on-accent: #fff8f2;
+  --dg-code-bg: #201811;
+  --dg-code-border: #483223;
+  --dg-code-ink: #ffe8d7;
+  --dg-shadow: 0 14px 28px rgba(88, 57, 22, 0.09);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --dg-bg: #0f1520;
+  --dg-bg-alt: #1a2435;
+  --dg-surface: #16202d;
+  --dg-panel: #101925;
+  --dg-soft: #202b3a;
+  --dg-ink: #ebf0f7;
+  --dg-muted: #9cacc2;
+  --dg-border: #2b3a50;
+  --dg-accent: #42b9ff;
+  --dg-accent-soft: #133249;
+  --dg-on-accent: #041522;
+  --dg-code-bg: #09111b;
+  --dg-code-border: #1f334a;
+  --dg-code-ink: #d2e5fb;
+  --dg-shadow: 0 18px 32px rgba(0, 0, 0, 0.28);
+  color-scheme: dark;
 }
 
 * {
@@ -22,16 +50,17 @@ body,
 }
 
 body {
-  font-family: 'Manrope', 'Segoe UI', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
   color: var(--dg-ink);
   background:
-    radial-gradient(circle at 16% 0%, #d8f2de 0%, transparent 35%),
-    radial-gradient(circle at 88% 0%, #e7f6e3 0%, transparent 36%),
-    linear-gradient(180deg, #f7faf7 0%, var(--dg-bg) 40%, #eef4ee 100%);
+    radial-gradient(circle at 14% -8%, color-mix(in oklab, var(--dg-accent) 26%, transparent), transparent 44%),
+    radial-gradient(circle at 90% -14%, color-mix(in oklab, var(--dg-bg-alt) 80%, transparent), transparent 50%),
+    linear-gradient(180deg, color-mix(in oklab, var(--dg-bg) 72%, white) 0%, var(--dg-bg) 44%, var(--dg-bg-alt) 100%);
+  transition: background 180ms ease, color 180ms ease;
 }
 
 h1,
 h2,
 h3 {
-  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+  font-family: 'Sora', 'Plus Jakarta Sans', sans-serif;
 }

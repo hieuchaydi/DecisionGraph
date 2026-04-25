@@ -1,13 +1,15 @@
-﻿import type { Locale } from '../types/docs'
+import type { Locale } from '../types/docs'
 
 type TopBarProps = {
   locale: Locale
   query: string
   onQueryChange: (value: string) => void
   onLocaleChange: (locale: Locale) => void
+  theme: 'light' | 'dark'
+  onThemeToggle: () => void
 }
 
-export function TopBar({ locale, query, onQueryChange, onLocaleChange }: TopBarProps) {
+export function TopBar({ locale, query, onQueryChange, onLocaleChange, theme, onThemeToggle }: TopBarProps) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -24,13 +26,25 @@ export function TopBar({ locale, query, onQueryChange, onLocaleChange }: TopBarP
           aria-label="Search documentation"
         />
 
-        <div className="locale">
-          <button className={locale === 'vi' ? 'tab active' : 'tab'} type="button" onClick={() => onLocaleChange('vi')}>
-            VI
+        <div className="toggles">
+          <button type="button" className="theme-toggle" onClick={onThemeToggle} aria-label="Toggle color theme">
+            {theme === 'light'
+              ? locale === 'vi'
+                ? 'Chế độ tối'
+                : 'Dark mode'
+              : locale === 'vi'
+                ? 'Chế độ sáng'
+                : 'Light mode'}
           </button>
-          <button className={locale === 'en' ? 'tab active' : 'tab'} type="button" onClick={() => onLocaleChange('en')}>
-            EN
-          </button>
+
+          <div className="locale">
+            <button className={locale === 'vi' ? 'tab active' : 'tab'} type="button" onClick={() => onLocaleChange('vi')}>
+              VI
+            </button>
+            <button className={locale === 'en' ? 'tab active' : 'tab'} type="button" onClick={() => onLocaleChange('en')}>
+              EN
+            </button>
+          </div>
         </div>
       </div>
     </header>
