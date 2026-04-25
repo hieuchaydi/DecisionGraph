@@ -27,6 +27,17 @@ jobs:
       - name: Run backend tests
         run: python -m pytest -q
 
+      - name: Run benchmark gate
+        env:
+          DECISIONGRAPH_DATA_PATH: ${{ github.workspace }}/.ci/decisiongraph.json
+        run: |
+          decisiongraph init --reset
+          decisiongraph benchmark-check \
+            --dataset tools/ci_eval.jsonl \
+            --seed-demo \
+            --min-top1 0.65 \
+            --min-keyword-coverage 0.65
+
   frontend:
     if: ${{ hashFiles('docs/package.json') != '' && hashFiles('docs/package-lock.json') != '' }}
     runs-on: ubuntu-latest

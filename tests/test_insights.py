@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from decisiongraph.insights import (
+    benchmark_gate,
     design_partner_progress,
     evaluate_dataset,
     interview_script,
@@ -57,6 +58,36 @@ def test_eval_dataset(tmp_path: Path) -> None:
     out = evaluate_dataset(svc, dataset_path=ds)
     assert out["total"] == 2
     assert "top1_accuracy" in out
+
+
+def test_benchmark_gate_pass_and_fail() -> None:
+    passing = benchmark_gate(
+        {
+            "total": 2,
+            "top1_accuracy": 0.8,
+            "keyword_coverage": 0.9,
+            "avg_latency_ms": 10.0,
+        },
+        min_top1_accuracy=0.7,
+        min_keyword_coverage=0.7,
+        max_avg_latency_ms=20.0,
+    )
+    assert passing["ok"] is True
+    assert passing["failures"] == []
+
+    failing = benchmark_gate(
+        {
+            "total": 0,
+            "top1_accuracy": 0.2,
+            "keyword_coverage": 0.1,
+            "avg_latency_ms": 99.0,
+        },
+        min_top1_accuracy=0.7,
+        min_keyword_coverage=0.7,
+        max_avg_latency_ms=50.0,
+    )
+    assert failing["ok"] is False
+    assert "dataset_is_empty" in failing["failures"]
 
 
 def test_problem_validation_scorecard() -> None:

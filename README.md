@@ -31,8 +31,10 @@ DecisionGraph keeps that reasoning traceable with evidence so teams can move fas
 ### 2) Decision Intelligence
 - Decision query with confidence + warnings.
 - Decision list/search with filters (`q`, `tag`, `component`, `owner`, `decision_type`).
+- Supersede flow to link newer decisions over older rationale.
 - Contradiction detection.
 - Stale assumption detection from live metrics.
+- Assumption watcher with `warn/critical` escalation tracking and optional webhook notification.
 - Summary report and graph snapshot.
 
 ### 3) Ops + Strategy Utilities
@@ -97,10 +99,12 @@ Inside chat, ask questions directly or use commands:
 /help
 /list 20
 /find <query>
+/supersede <new_id> <old_id>
 /get <decision_id>
 /guard <change request>
 /contradictions
 /stale
+/watch
 /metrics
 /graph
 /report json
@@ -114,6 +118,8 @@ decisiongraph list
 decisiongraph list --q "rabbitmq" --tag queues
 decisiongraph list --owner finance --decision-type risk-policy
 decisiongraph query "Why did we cap payment retries at 2?"
+decisiongraph supersede <new_decision_id> <old_decision_id>
+decisiongraph watch-assumptions
 decisiongraph guardrail "Increase retry attempts in payment flow"
 ```
 
@@ -200,6 +206,20 @@ curl "http://127.0.0.1:8000/api/decisions?limit=10&q=rabbitmq&tag=queues"
 curl "http://127.0.0.1:8000/api/decisions?owner=finance&decision_type=risk-policy"
 ```
 
+6. Link a replacement decision with supersede flow:
+```bash
+curl -X POST http://127.0.0.1:8000/api/decisions/supersede \
+  -H "content-type: application/json" \
+  -d '{"decision_id":"<new_decision_id>","superseded_decision_id":"<old_decision_id>"}'
+```
+
+7. Run assumption watcher:
+```bash
+curl -X POST http://127.0.0.1:8000/api/assumptions/watch \
+  -H "content-type: application/json" \
+  -d '{"warn_severities":["medium","high"],"critical_severities":["high"]}'
+```
+
 ## API Surface (Main Endpoints)
 
 ### System
@@ -210,10 +230,12 @@ curl "http://127.0.0.1:8000/api/decisions?owner=finance&decision_type=risk-polic
 ### Decisions
 - `GET /api/decisions` (supports `limit`, `q`, `tag`, `component`, `owner`, `decision_type`)
 - `GET /api/decisions/{decision_id}`
+- `POST /api/decisions/supersede`
 - `POST /api/query`
 - `POST /api/guardrail`
 - `GET /api/contradictions`
 - `GET /api/assumptions/stale`
+- `POST /api/assumptions/watch`
 - `GET /api/metrics`
 - `POST /api/metrics`
 - `GET /api/graph`
@@ -231,6 +253,7 @@ curl "http://127.0.0.1:8000/api/decisions?owner=finance&decision_type=risk-polic
 - `GET /api/scenarios/run`
 - `GET /api/kpi/snapshot`
 - `POST /api/eval/dataset`
+- `POST /api/eval/benchmark-check`
 - `POST /api/research/scorecard`
 - `GET /api/research/interview-script`
 - `POST /api/research/design-partner-progress`
@@ -251,10 +274,12 @@ curl "http://127.0.0.1:8000/api/decisions?owner=finance&decision_type=risk-polic
 - `decisiongraph chat [--list-limit 20] [--guardrail-limit 3]`
 - `decisiongraph list --limit 20 [--q ...] [--tag ...] [--component ...] [--owner ...] [--decision-type ...]`
 - `decisiongraph get <decision_id>`
+- `decisiongraph supersede <decision_id> <superseded_decision_id>`
 - `decisiongraph query "..."`
 - `decisiongraph guardrail "..."`
 - `decisiongraph contradictions`
 - `decisiongraph stale-assumptions`
+- `decisiongraph watch-assumptions [--warn medium,high] [--critical high] [--notify --webhook-url ...]`
 - `decisiongraph metric-set --key ... --value ... [--unit ...]`
 - `decisiongraph metrics`
 - `decisiongraph graph`
@@ -278,6 +303,7 @@ curl "http://127.0.0.1:8000/api/decisions?owner=finance&decision_type=risk-polic
 - `decisiongraph scenarios`
 - `decisiongraph kpi`
 - `decisiongraph eval-dataset --dataset <eval.jsonl>`
+- `decisiongraph benchmark-check --dataset <eval.jsonl> [--min-top1 0.7] [--min-keyword-coverage 0.7]`
 - `decisiongraph research-score --pain-frequency ... --impact ...`
 - `decisiongraph research-script`
 - `decisiongraph design-partner-progress`
@@ -291,9 +317,9 @@ decisiongraph mcp
 ```
 
 Tool groups:
-- Core tools: query, list, guardrail, contradictions, stale assumptions, metrics, graph, report.
+- Core tools: query, list, supersede, guardrail, contradictions, stale assumptions, watch assumptions, metrics, graph, report.
 - Ingestion tools: git/jsonl/github/slack/jira connectors.
-- Insight tools: scenarios, KPI snapshot, dataset evaluation, research scoring.
+- Insight tools: scenarios, KPI snapshot, dataset evaluation, benchmark gate, research scoring.
 - Strategy/Ops tools: strategy sections, doctor, runbook, release check, security audit.
 
 ## Project Structure
@@ -310,6 +336,7 @@ src/decisiongraph/
   mcp_toolsets/          MCP tool groups
 
 tests/                   Backend test suite
+tools/                   CI benchmark datasets and helper artifacts
 docs/                    Frontend docs app (Vite + React)
 assets/                  README visual assets
 ```
@@ -318,16 +345,19 @@ assets/                  README visual assets
 Local quality commands:
 ```bash
 python -m pytest -q
+decisiongraph benchmark-check --dataset tools/ci_eval.jsonl --seed-demo --min-top1 0.65 --min-keyword-coverage 0.65
 cd docs && npm run lint && npm run build
 ```
 
 Latest local validation (2026-04-25):
 - Backend tests: pass
+- Benchmark gate (`tools/ci_eval.jsonl`): pass
 - Frontend lint: pass
 - Frontend build: pass
 
 CI pipeline:
 - [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
+- Backend matrix tests + benchmark gate on `tools/ci_eval.jsonl`
 
 ## Delivery Scope (3 Rounds)
 1. Round 1 (Core): ingestion, extraction, query, guardrail, contradiction, stale assumptions.

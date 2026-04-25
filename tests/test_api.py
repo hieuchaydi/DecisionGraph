@@ -183,3 +183,66 @@ def test_api_decisions_support_query_and_filters() -> None:
     assert filtered_payload["count"] >= 1
     assert all(item["decision_type"] == "risk-policy" for item in filtered_payload["items"])
     assert all(any("finance" in owner.lower() for owner in item["owners"]) for item in filtered_payload["items"])
+
+
+def test_api_supersede_flow() -> None:
+    SERVICE.seed_demo()
+    client = TestClient(app)
+
+    ing = client.post(
+        "/api/ingest",
+        json={
+            "source_id": "rfc-payment-retry-2026",
+            "source_type": "rfc",
+            "text": (
+                "Title: Keep payment retry cap at 2 attempts with stronger auditing\n"
+                "Summary: We keep retry cap at 2 to reduce duplicate-charge risk while adding audit visibility."
+            ),
+        },
+    )
+    assert ing.status_code == 200
+    new_id = ing.json()["decision"]["id"]
+    old = next(item for item in SERVICE.list_decisions(limit=200) if item.title == "Cap payment retries at 2 attempts")
+
+    sup = client.post(
+        "/api/decisions/supersede",
+        json={"decision_id": new_id, "superseded_decision_id": old.id},
+    )
+    assert sup.status_code == 200
+    assert old.id in sup.json()["decision"]["supersedes"]
+
+
+def test_api_assumption_watch_and_benchmark_gate(tmp_path: Path) -> None:
+    SERVICE.seed_demo()
+    client = TestClient(app)
+
+    watch = client.post("/api/assumptions/watch", json={})
+    assert watch.status_code == 200
+    watch_payload = watch.json()
+    assert "alerts" in watch_payload
+    assert "critical_count" in watch_payload
+
+    ds = tmp_path / "eval.jsonl"
+    ds.write_text(
+        '{"question":"Why did we choose Redis instead of RabbitMQ?","expected_title_contains":"redis","expected_keywords":["redis","rabbitmq"]}\n',
+        encoding="utf-8",
+    )
+    gate = client.post(
+        "/api/eval/benchmark-check",
+        json={
+            "path": str(ds),
+            "min_top1_accuracy": 0.1,
+            "min_keyword_coverage": 0.1,
+            "max_avg_latency_ms": 0.0,
+        },
+    )
+    assert gate.status_code == 200
+    gate_payload = gate.json()
+    assert "report" in gate_payload
+    assert "gate" in gate_payload
+
+
+def test_api_assumption_watch_notify_requires_webhook() -> None:
+    client = TestClient(app)
+    out = client.post("/api/assumptions/watch", json={"notify": True})
+    assert out.status_code == 400

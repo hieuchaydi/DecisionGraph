@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from decisiongraph.insights import evaluate_dataset, kpi_snapshot, run_scenarios, score_problem_validation
+from decisiongraph.insights import benchmark_gate, evaluate_dataset, kpi_snapshot, run_scenarios, score_problem_validation
 from decisiongraph.insights import design_partner_progress, interview_script
 from decisiongraph.service import DecisionGraphService
 
@@ -22,6 +22,23 @@ def register_insight_tools(mcp, service: DecisionGraphService) -> None:
     def eval_dataset(path: str) -> dict:
         """Evaluate query quality against a JSONL dataset."""
         return evaluate_dataset(service, dataset_path=Path(path).expanduser().resolve())
+
+    @mcp.tool()
+    def benchmark_check(
+        path: str,
+        min_top1_accuracy: float = 0.7,
+        min_keyword_coverage: float = 0.7,
+        max_avg_latency_ms: float = 0.0,
+    ) -> dict:
+        """Run dataset evaluation and apply release gate thresholds."""
+        report = evaluate_dataset(service, dataset_path=Path(path).expanduser().resolve())
+        gate = benchmark_gate(
+            report,
+            min_top1_accuracy=min_top1_accuracy,
+            min_keyword_coverage=min_keyword_coverage,
+            max_avg_latency_ms=max_avg_latency_ms,
+        )
+        return {"report": report, "gate": gate}
 
     @mcp.tool()
     def research_scorecard(

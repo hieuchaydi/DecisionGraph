@@ -2,7 +2,13 @@
 
 from fastapi import APIRouter, HTTPException
 
-from decisiongraph.api_schemas import GuardrailRequest, MetricUpsertRequest, QueryRequest
+from decisiongraph.api_schemas import (
+    AssumptionWatchRequest,
+    GuardrailRequest,
+    MetricUpsertRequest,
+    QueryRequest,
+    SupersedeRequest,
+)
 from decisiongraph.service import DecisionGraphService
 
 
@@ -38,6 +44,17 @@ def create_decision_router(service: DecisionGraphService) -> APIRouter:
             raise HTTPException(status_code=404, detail='Decision not found')
         return row.to_dict()
 
+    @router.post('/api/decisions/supersede')
+    def supersede(payload: SupersedeRequest) -> dict[str, object]:
+        try:
+            row = service.supersede_decision(
+                decision_id=payload.decision_id,
+                superseded_decision_id=payload.superseded_decision_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {'status': 'ok', 'decision': row.to_dict()}
+
     @router.post('/api/query')
     def query(payload: QueryRequest) -> dict[str, object]:
         return service.query(payload.question).to_dict()
@@ -55,6 +72,18 @@ def create_decision_router(service: DecisionGraphService) -> APIRouter:
     def stale_assumptions() -> dict[str, object]:
         rows = service.detect_stale_assumptions()
         return {'count': len(rows), 'items': [item.to_dict() for item in rows]}
+
+    @router.post('/api/assumptions/watch')
+    def assumption_watch(payload: AssumptionWatchRequest) -> dict[str, object]:
+        try:
+            return service.run_assumption_watch(
+                warn_severities=payload.warn_severities,
+                critical_severities=payload.critical_severities,
+                notify=payload.notify,
+                webhook_url=payload.webhook_url,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.get('/api/metrics')
     def list_metrics() -> dict[str, object]:

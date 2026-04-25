@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from decisiongraph.integrations import IngestDocument
 from decisiongraph.service import DecisionGraphService
 from decisiongraph.store import DecisionStore
@@ -164,3 +166,61 @@ def test_list_decisions_with_query_and_filters(tmp_path: Path) -> None:
     by_query = svc.list_decisions(limit=10, query="rabbitmq")
     assert by_query
     assert "rabbitmq" in by_query[0].title.lower()
+
+
+def test_supersede_updates_links_and_query_priority(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    svc.seed_demo()
+    old = next(row for row in svc.list_decisions(limit=100) if row.title == "Cap payment retries at 2 attempts")
+
+    replacement = svc.ingest_text(
+        source_id="rfc-payment-retry-2026",
+        source_type="rfc",
+        text="\n".join(
+            [
+                "Title: Keep payment retry cap at 2 attempts with stronger auditing",
+                "Summary: We keep retry cap at 2 to reduce duplicate-charge risk while adding audit visibility.",
+                "Owner: Payments Team",
+                "Risk: Revenue loss during gateway outages",
+            ]
+        ),
+    )
+
+    superseding = svc.supersede_decision(decision_id=replacement.id, superseded_decision_id=old.id)
+    refreshed_old = svc.get_decision(old.id)
+    assert refreshed_old is not None
+    assert refreshed_old.superseded_by == superseding.id
+    assert old.id in superseding.supersedes
+
+    out = svc.query("Why is payment retry logic capped at 2 retries?")
+    assert out.decision is not None
+    assert out.decision.id == superseding.id
+
+
+def test_run_assumption_watch_tracks_escalation_and_resolution(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    svc.seed_demo()
+
+    first = svc.run_assumption_watch()
+    assert first["alerts"], "Expected initial alerts for medium/high stale assumptions"
+    assert all(item["is_new"] is True for item in first["alerts"])
+
+    second = svc.run_assumption_watch()
+    assert second["alerts"] == []
+
+    svc.set_metric("queue_volume", 200000.0, "events/day")
+    escalated = svc.run_assumption_watch()
+    queue_alerts = [item for item in escalated["alerts"] if item["metric_key"] == "queue_volume"]
+    assert queue_alerts
+    assert any(item["is_escalation"] for item in queue_alerts)
+
+    svc.set_metric("queue_volume", 50000.0, "events/day")
+    resolved = svc.run_assumption_watch()
+    assert resolved["resolved_count"] >= 1
+
+
+def test_run_assumption_watch_requires_webhook_for_notify(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    svc.seed_demo()
+    with pytest.raises(ValueError):
+        svc.run_assumption_watch(notify=True)

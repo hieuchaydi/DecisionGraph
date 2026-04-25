@@ -1,0 +1,3 @@
+{"question":"Why did we choose Redis instead of RabbitMQ for async workflows?","expected_title_contains":"redis","expected_keywords":["redis","rabbitmq","trade-offs"]}
+{"question":"Why is payment retry logic capped at 2 retries?","expected_title_contains":"payment","expected_keywords":["payment","retry","risks"]}
+{"question":"Why did we revert from microservices back to monolith?","expected_title_contains":"monolith","expected_keywords":["revert","microservices","incident"]}

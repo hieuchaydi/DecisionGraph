@@ -5,6 +5,9 @@ import re
 import uuid
 from datetime import date
 from pathlib import Path
+from typing import Any
+
+import httpx
 
 from decisiongraph.extractor import HeuristicExtractor
 from decisiongraph.models import (
@@ -47,6 +50,8 @@ STOPWORDS = {
     "into",
     "when",
 }
+SEVERITY_RANK = {"low": 1, "medium": 2, "high": 3}
+VALID_SEVERITIES = set(SEVERITY_RANK.keys())
 
 
 def _tokenize(text: str) -> set[str]:
@@ -85,6 +90,11 @@ def _score_decision(decision: Decision, q_tokens: set[str], question: str) -> fl
     score += 0.4 * len(q_tokens.intersection(title_tokens))
     score += min(1.0, len(decision.evidence_ids) * 0.2)
     score += max(0.0, min(1.0, decision.confidence))
+    if decision.superseded_by:
+        # Keep superseded records searchable, but prefer active decisions.
+        score -= 1.5
+    if decision.supersedes:
+        score += 0.15
     return score
 
 
@@ -247,11 +257,143 @@ class DecisionGraphService:
     def get_decision(self, decision_id: str) -> Decision | None:
         return self.store.get_decision(decision_id)
 
+    def supersede_decision(self, decision_id: str, superseded_decision_id: str) -> Decision:
+        decision = self.store.get_decision(decision_id)
+        if not decision:
+            raise ValueError(f"Decision not found: {decision_id}")
+        superseded = self.store.get_decision(superseded_decision_id)
+        if not superseded:
+            raise ValueError(f"Decision not found: {superseded_decision_id}")
+        if decision.id == superseded.id:
+            raise ValueError("A decision cannot supersede itself")
+        if superseded.superseded_by and superseded.superseded_by != decision.id:
+            raise ValueError(
+                f"Decision {superseded.id} is already superseded by {superseded.superseded_by}"
+            )
+
+        if superseded.id not in decision.supersedes:
+            decision.supersedes.append(superseded.id)
+        superseded.superseded_by = decision.id
+        now = utc_now_iso()
+        decision.updated_at = now
+        superseded.updated_at = now
+        self.store.upsert(decision, [])
+        self.store.upsert(superseded, [])
+        return decision
+
     def list_metrics(self) -> list[MetricSnapshot]:
         return self.store.list_metrics()
 
     def set_metric(self, key: str, value: float, unit: str | None = None) -> MetricSnapshot:
         return self.store.set_metric(key=key, value=value, unit=unit)
+
+    @staticmethod
+    def _watch_key(item: StaleAssumption) -> str:
+        return f"{item.decision_id}|{item.metric_key}|{item.assumption}"
+
+    @staticmethod
+    def _parse_severities(raw: list[str] | None, default: set[str]) -> set[str]:
+        if not raw:
+            return set(default)
+        parsed = {entry.strip().lower() for entry in raw if entry and entry.strip()}
+        unknown = parsed - VALID_SEVERITIES
+        if unknown:
+            unknown_list = ", ".join(sorted(unknown))
+            raise ValueError(f"Invalid severity values: {unknown_list}")
+        return parsed
+
+    def _dispatch_watch_notification(self, webhook_url: str, payload: dict[str, Any]) -> tuple[bool, str | None]:
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                response = client.post(webhook_url, json=payload)
+            response.raise_for_status()
+        except Exception as exc:  # pragma: no cover - network dependency
+            return False, str(exc)
+        return True, None
+
+    def run_assumption_watch(
+        self,
+        *,
+        warn_severities: list[str] | None = None,
+        critical_severities: list[str] | None = None,
+        notify: bool = False,
+        webhook_url: str | None = None,
+    ) -> dict[str, Any]:
+        if notify and not (webhook_url or "").strip():
+            raise ValueError("webhook_url is required when notify=true")
+        warn_on = self._parse_severities(warn_severities, {"medium", "high"})
+        critical_on = self._parse_severities(critical_severities, {"high"})
+        stale = self.detect_stale_assumptions()
+        stale_map = {self._watch_key(item): item for item in stale}
+
+        previous_state = self.store.get_watch_state()
+        alerts: list[dict[str, Any]] = []
+        for key, item in stale_map.items():
+            previous_severity = previous_state.get(key)
+            current_severity = item.severity
+            previous_rank = SEVERITY_RANK.get(previous_severity or "", 0)
+            current_rank = SEVERITY_RANK[current_severity]
+            escalated = previous_severity is not None and current_rank > previous_rank
+            is_new = previous_severity is None
+            if current_severity in critical_on:
+                level = "critical"
+            elif current_severity in warn_on:
+                level = "warn"
+            else:
+                level = ""
+            if not level:
+                continue
+            if not (is_new or escalated):
+                continue
+            alerts.append(
+                {
+                    "decision_id": item.decision_id,
+                    "metric_key": item.metric_key,
+                    "assumption": item.assumption,
+                    "previous_severity": previous_severity,
+                    "current_severity": current_severity,
+                    "transition": f"{previous_severity or 'none'}->{current_severity}",
+                    "level": level,
+                    "is_new": is_new,
+                    "is_escalation": escalated,
+                }
+            )
+
+        resolved = sorted(set(previous_state.keys()) - set(stale_map.keys()))
+        self.store.set_watch_state({key: item.severity for key, item in stale_map.items()})
+
+        notification_url = (webhook_url or "").strip()
+        notification_attempted = notify and bool(notification_url)
+        notification_sent = False
+        notification_error: str | None = None
+        if notification_attempted and alerts:
+            notification_sent, notification_error = self._dispatch_watch_notification(
+                notification_url,
+                {
+                    "event": "decisiongraph.assumption_watch",
+                    "alert_count": len(alerts),
+                    "critical_count": sum(1 for item in alerts if item["level"] == "critical"),
+                    "warn_count": sum(1 for item in alerts if item["level"] == "warn"),
+                    "alerts": alerts,
+                },
+            )
+
+        return {
+            "stale_count": len(stale),
+            "warn_count": sum(1 for item in stale if item.severity in warn_on),
+            "critical_count": sum(1 for item in stale if item.severity in critical_on),
+            "alerts": alerts,
+            "resolved_count": len(resolved),
+            "resolved_items": resolved,
+            "warn_severities": sorted(warn_on),
+            "critical_severities": sorted(critical_on),
+            "notification": {
+                "attempted": notification_attempted,
+                "sent": notification_sent,
+                "url": notification_url if notification_attempted else None,
+                "error": notification_error,
+            },
+        }
 
     def _rank(self, question: str, limit: int = 3) -> list[Decision]:
         q_tokens = _tokenize(question)
@@ -296,6 +438,10 @@ class DecisionGraphService:
             answer_lines.append(f"Risks: {', '.join(best.risks)}")
         if best.component:
             answer_lines.append(f"Component: {best.component}")
+        if best.supersedes:
+            answer_lines.append(f"Supersedes: {', '.join(best.supersedes)}")
+        if best.superseded_by:
+            answer_lines.append(f"Superseded by: {best.superseded_by}")
         if linked_evidence:
             answer_lines.append("Evidence:")
             for item in linked_evidence[:3]:
@@ -308,6 +454,8 @@ class DecisionGraphService:
             warnings.append("low_confidence")
         if not linked_evidence:
             warnings.append("no_evidence_linked")
+        if best.superseded_by:
+            warnings.append("decision_superseded")
 
         return QueryAnswer(
             question=question,

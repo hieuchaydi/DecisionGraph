@@ -27,7 +27,7 @@ class DecisionStore:
 
     @staticmethod
     def _empty_payload() -> dict[str, Any]:
-        return {"schema_version": 2, "decisions": [], "evidence": [], "metrics": []}
+        return {"schema_version": 3, "decisions": [], "evidence": [], "metrics": [], "watch_state": {}}
 
     @contextmanager
     def _exclusive_lock(self) -> Iterator[None]:
@@ -80,6 +80,15 @@ class DecisionStore:
         normalized["decisions"] = data.get("decisions", [])
         normalized["evidence"] = data.get("evidence", [])
         normalized["metrics"] = data.get("metrics", [])
+        raw_watch_state = data.get("watch_state", {})
+        if isinstance(raw_watch_state, dict):
+            normalized["watch_state"] = {
+                str(key): str(value)
+                for key, value in raw_watch_state.items()
+                if value is not None
+            }
+        else:
+            normalized["watch_state"] = {}
         return normalized
 
     def _read(self) -> dict[str, Any]:
@@ -186,4 +195,17 @@ class DecisionStore:
                 evidence_by_id[ev.id] = ev.to_dict()
             data["evidence"] = list(evidence_by_id.values())
             data["decisions"] = decision_rows
+            self._write(data)
+
+    def get_watch_state(self) -> dict[str, str]:
+        data = self._read()
+        raw = data.get("watch_state", {})
+        if not isinstance(raw, dict):
+            return {}
+        return {str(key): str(value) for key, value in raw.items() if value is not None}
+
+    def set_watch_state(self, state: dict[str, str]) -> None:
+        with self._exclusive_lock():
+            data = self._read()
+            data["watch_state"] = {str(key): str(value) for key, value in state.items()}
             self._write(data)

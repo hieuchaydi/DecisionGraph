@@ -15,10 +15,12 @@ CHAT_HELP = """Commands:
   /help                              Show this help
   /list [limit]                      List latest decisions
   /find <query>                      Search decisions by text
+  /supersede <new_id> <old_id>       Mark one decision as superseding another
   /get <decision_id>                 Show one decision as JSON
   /guard <change request>            Run guardrail check
   /contradictions                    Show detected contradictions
   /stale                             Show stale assumptions
+  /watch                             Run assumption watcher (warn/critical transitions)
   /metrics                           Show metric snapshots
   /graph                             Show graph node/edge counts
   /report [json|markdown]            Show summary report
@@ -83,6 +85,20 @@ def process_chat_turn(
                 return False, ["Usage: /find <query>"]
             return False, _render_list(service.list_decisions(limit=list_limit, query=arg))
 
+        if cmd == "/supersede":
+            parts = arg.split()
+            if len(parts) != 2:
+                return False, ["Usage: /supersede <new_id> <old_id>"]
+            decision_id, superseded_decision_id = parts
+            try:
+                row = service.supersede_decision(
+                    decision_id=decision_id,
+                    superseded_decision_id=superseded_decision_id,
+                )
+            except ValueError as exc:
+                return False, [str(exc)]
+            return False, [f"Supersede link updated: {row.id} supersedes {superseded_decision_id}"]
+
         if cmd == "/get":
             if not arg:
                 return False, ["Usage: /get <decision_id>"]
@@ -104,6 +120,10 @@ def process_chat_turn(
         if cmd == "/stale":
             rows = [item.to_dict() for item in service.detect_stale_assumptions()]
             return False, [json.dumps(rows, indent=2)]
+
+        if cmd == "/watch":
+            payload = service.run_assumption_watch()
+            return False, [json.dumps(payload, indent=2)]
 
         if cmd == "/metrics":
             rows = [item.to_dict() for item in service.list_metrics()]
@@ -212,6 +232,19 @@ def register_core_commands(app: typer.Typer) -> None:
             raise typer.Exit(code=1)
         echo_json(row.to_dict())
 
+    @app.command("supersede")
+    def supersede(decision_id: str, superseded_decision_id: str) -> None:
+        service = build_service()
+        try:
+            row = service.supersede_decision(
+                decision_id=decision_id,
+                superseded_decision_id=superseded_decision_id,
+            )
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
+        echo_json({"status": "ok", "decision": row.to_dict()})
+
     @app.command("guardrail")
     def guardrail(change_request: str, limit: int = typer.Option(3, min=1, max=10)) -> None:
         service = build_service()
@@ -229,6 +262,28 @@ def register_core_commands(app: typer.Typer) -> None:
         service = build_service()
         rows = service.detect_stale_assumptions()
         echo_json([item.to_dict() for item in rows])
+
+    @app.command("watch-assumptions")
+    def watch_assumptions(
+        warn: str = typer.Option("medium,high", help="Warn severities (comma-separated)"),
+        critical: str = typer.Option("high", help="Critical severities (comma-separated)"),
+        notify: bool = typer.Option(False, help="Send webhook notification for new/escalated alerts"),
+        webhook_url: str = typer.Option("", help="Webhook URL (required when --notify)"),
+    ) -> None:
+        service = build_service()
+        warn_values = [entry.strip() for entry in warn.split(",") if entry.strip()]
+        critical_values = [entry.strip() for entry in critical.split(",") if entry.strip()]
+        try:
+            payload = service.run_assumption_watch(
+                warn_severities=warn_values,
+                critical_severities=critical_values,
+                notify=notify,
+                webhook_url=webhook_url or None,
+            )
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
+        echo_json(payload)
 
     @app.command("metric-set")
     def metric_set(

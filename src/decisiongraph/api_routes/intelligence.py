@@ -4,8 +4,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from decisiongraph.api_schemas import DesignPartnerProgressRequest, EvalDatasetRequest, ResearchScoreRequest
-from decisiongraph.insights import evaluate_dataset, kpi_snapshot, run_scenarios, score_problem_validation
+from decisiongraph.api_schemas import BenchmarkGateRequest, DesignPartnerProgressRequest, EvalDatasetRequest, ResearchScoreRequest
+from decisiongraph.insights import benchmark_gate, evaluate_dataset, kpi_snapshot, run_scenarios, score_problem_validation
 from decisiongraph.insights import design_partner_progress, interview_script
 from decisiongraph.ops import doctor, release_check, runbook, schema_info, security_audit
 from decisiongraph.service import DecisionGraphService
@@ -30,6 +30,21 @@ def create_intelligence_router(service: DecisionGraphService) -> APIRouter:
             return evaluate_dataset(service, dataset_path=path)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post('/api/eval/benchmark-check')
+    def api_eval_benchmark_check(payload: BenchmarkGateRequest) -> dict[str, object]:
+        path = Path(payload.path).expanduser().resolve()
+        try:
+            report = evaluate_dataset(service, dataset_path=path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        gate = benchmark_gate(
+            report,
+            min_top1_accuracy=payload.min_top1_accuracy,
+            min_keyword_coverage=payload.min_keyword_coverage,
+            max_avg_latency_ms=payload.max_avg_latency_ms,
+        )
+        return {"report": report, "gate": gate}
 
     @router.post('/api/research/scorecard')
     def api_research_scorecard(payload: ResearchScoreRequest) -> dict[str, object]:

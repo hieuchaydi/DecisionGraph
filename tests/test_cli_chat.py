@@ -44,6 +44,31 @@ def test_chat_turn_find(tmp_path: Path) -> None:
     assert any("rabbitmq" in line.lower() for line in lines)
 
 
+def test_chat_turn_supersede(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    old = next(row for row in svc.list_decisions(limit=100) if row.title == "Cap payment retries at 2 attempts")
+    new = svc.ingest_text(
+        source_id="chat-supersede",
+        source_type="rfc",
+        text=(
+            "Title: Keep payment retry cap at 2 attempts with stronger auditing\n"
+            "Summary: we keep retry cap at 2 and add audit visibility."
+        ),
+    )
+
+    should_exit, lines = process_chat_turn(svc, f"/supersede {new.id} {old.id}")
+    assert should_exit is False
+    assert "Supersede link updated" in lines[0]
+
+
+def test_chat_turn_watch(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    should_exit, lines = process_chat_turn(svc, "/watch")
+    assert should_exit is False
+    assert lines
+    assert '"alerts"' in lines[0]
+
+
 def test_chat_turn_exit(tmp_path: Path) -> None:
     svc = _service(tmp_path)
     should_exit, lines = process_chat_turn(svc, "/exit")

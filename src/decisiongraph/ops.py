@@ -93,4 +93,5 @@ def schema_info() -> dict[str, Any]:
         "decisions": len(payload.get("decisions", [])),
         "evidence": len(payload.get("evidence", [])),
         "metrics": len(payload.get("metrics", [])),
+        "watch_state": len(payload.get("watch_state", {})),
     }

@@ -31,6 +31,18 @@ class MetricUpsertRequest(BaseModel):
     unit: str | None = None
 
 
+class SupersedeRequest(BaseModel):
+    decision_id: str = Field(min_length=1)
+    superseded_decision_id: str = Field(min_length=1)
+
+
+class AssumptionWatchRequest(BaseModel):
+    warn_severities: list[str] = Field(default_factory=lambda: ["medium", "high"])
+    critical_severities: list[str] = Field(default_factory=lambda: ["high"])
+    notify: bool = False
+    webhook_url: str | None = None
+
+
 class GitIngestRequest(BaseModel):
     repo_path: str = Field(min_length=1)
     max_commits: int = Field(default=200, ge=1, le=5000)
@@ -61,6 +73,13 @@ class JiraJsonIngestRequest(BaseModel):
 
 class EvalDatasetRequest(BaseModel):
     path: str = Field(min_length=1)
+
+
+class BenchmarkGateRequest(BaseModel):
+    path: str = Field(min_length=1)
+    min_top1_accuracy: float = Field(default=0.7, ge=0.0, le=1.0)
+    min_keyword_coverage: float = Field(default=0.7, ge=0.0, le=1.0)
+    max_avg_latency_ms: float = Field(default=0.0, ge=0.0)
 
 
 class ResearchScoreRequest(BaseModel):

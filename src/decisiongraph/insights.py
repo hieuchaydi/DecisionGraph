@@ -168,6 +168,45 @@ def evaluate_dataset(service: DecisionGraphService, dataset_path: Path) -> dict[
     }
 
 
+def benchmark_gate(
+    report: dict[str, Any],
+    *,
+    min_top1_accuracy: float = 0.7,
+    min_keyword_coverage: float = 0.7,
+    max_avg_latency_ms: float = 0.0,
+) -> dict[str, Any]:
+    failures: list[str] = []
+    total = int(report.get("total", 0))
+    top1 = float(report.get("top1_accuracy", 0.0))
+    keyword = float(report.get("keyword_coverage", 0.0))
+    latency = float(report.get("avg_latency_ms", 0.0))
+
+    if total <= 0:
+        failures.append("dataset_is_empty")
+    if top1 < min_top1_accuracy:
+        failures.append(f"top1_accuracy_below_threshold:{top1}<{min_top1_accuracy}")
+    if keyword < min_keyword_coverage:
+        failures.append(f"keyword_coverage_below_threshold:{keyword}<{min_keyword_coverage}")
+    if max_avg_latency_ms > 0 and latency > max_avg_latency_ms:
+        failures.append(f"avg_latency_above_threshold:{latency}>{max_avg_latency_ms}")
+
+    return {
+        "ok": len(failures) == 0,
+        "failures": failures,
+        "thresholds": {
+            "min_top1_accuracy": min_top1_accuracy,
+            "min_keyword_coverage": min_keyword_coverage,
+            "max_avg_latency_ms": max_avg_latency_ms,
+        },
+        "metrics": {
+            "total": total,
+            "top1_accuracy": top1,
+            "keyword_coverage": keyword,
+            "avg_latency_ms": latency,
+        },
+    }
+
+
 def score_problem_validation(
     *,
     pain_frequency: int,
