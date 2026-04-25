@@ -14,6 +14,7 @@ from decisiongraph.store import DecisionStore
 CHAT_HELP = """Commands:
   /help                              Show this help
   /list [limit]                      List latest decisions
+  /find <query>                      Search decisions by text
   /get <decision_id>                 Show one decision as JSON
   /guard <change request>            Run guardrail check
   /contradictions                    Show detected contradictions
@@ -76,6 +77,11 @@ def process_chat_turn(
                 if limit < 1 or limit > 200:
                     return False, ["Limit must be in range 1..200"]
             return False, _render_list(service.list_decisions(limit=limit))
+
+        if cmd == "/find":
+            if not arg:
+                return False, ["Usage: /find <query>"]
+            return False, _render_list(service.list_decisions(limit=list_limit, query=arg))
 
         if cmd == "/get":
             if not arg:
@@ -177,9 +183,24 @@ def register_core_commands(app: typer.Typer) -> None:
                 break
 
     @app.command("list")
-    def list_decisions(limit: int = typer.Option(20, min=1, max=200)) -> None:
+    def list_decisions(
+        limit: int = typer.Option(20, min=1, max=200),
+        q: str = typer.Option("", help="Search query"),
+        tag: str = typer.Option("", help="Tag filter (comma-separated)"),
+        component: str = typer.Option("", help="Component filter"),
+        owner: str = typer.Option("", help="Owner filter"),
+        decision_type: str = typer.Option("", help="Decision type filter"),
+    ) -> None:
         service = build_service()
-        for line in _render_list(service.list_decisions(limit=limit)):
+        rows = service.list_decisions(
+            limit=limit,
+            query=q or None,
+            tag=tag or None,
+            component=component or None,
+            owner=owner or None,
+            decision_type=decision_type or None,
+        )
+        for line in _render_list(rows):
             typer.echo(line)
 
     @app.command("get")

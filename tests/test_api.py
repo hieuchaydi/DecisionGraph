@@ -165,3 +165,21 @@ def test_api_kpi_scenarios_eval_and_research(tmp_path: Path) -> None:
     schema = client.get("/api/schema/info")
     assert schema.status_code == 200
     assert "schema_version" in schema.json()
+
+
+def test_api_decisions_support_query_and_filters() -> None:
+    SERVICE.seed_demo()
+    client = TestClient(app)
+
+    search = client.get("/api/decisions", params={"q": "rabbitmq", "tag": "queues", "limit": 5})
+    assert search.status_code == 200
+    payload = search.json()
+    assert payload["count"] >= 1
+    assert any("rabbitmq" in item["title"].lower() for item in payload["items"])
+
+    filtered = client.get("/api/decisions", params={"owner": "finance", "decision_type": "risk-policy"})
+    assert filtered.status_code == 200
+    filtered_payload = filtered.json()
+    assert filtered_payload["count"] >= 1
+    assert all(item["decision_type"] == "risk-policy" for item in filtered_payload["items"])
+    assert all(any("finance" in owner.lower() for owner in item["owners"]) for item in filtered_payload["items"])

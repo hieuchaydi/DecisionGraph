@@ -36,6 +36,14 @@ def test_chat_turn_guardrail(tmp_path: Path) -> None:
     assert '"blocked"' in lines[0]
 
 
+def test_chat_turn_find(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    should_exit, lines = process_chat_turn(svc, "/find rabbitmq")
+    assert should_exit is False
+    assert lines
+    assert any("rabbitmq" in line.lower() for line in lines)
+
+
 def test_chat_turn_exit(tmp_path: Path) -> None:
     svc = _service(tmp_path)
     should_exit, lines = process_chat_turn(svc, "/exit")

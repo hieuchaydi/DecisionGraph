@@ -200,8 +200,49 @@ class DecisionGraphService:
             inserted.append(row)
         return inserted
 
-    def list_decisions(self, limit: int = 50) -> list[Decision]:
-        return self.store.list_decisions(limit=limit)
+    def list_decisions(
+        self,
+        limit: int = 50,
+        *,
+        query: str | None = None,
+        tag: str | None = None,
+        component: str | None = None,
+        owner: str | None = None,
+        decision_type: str | None = None,
+    ) -> list[Decision]:
+        rows = self.store.list_decisions(limit=10000)
+
+        tag_filters = {part.strip().lower() for part in (tag or "").split(",") if part.strip()}
+        component_filter = (component or "").strip().lower()
+        owner_filter = (owner or "").strip().lower()
+        decision_type_filter = (decision_type or "").strip().lower()
+
+        filtered: list[Decision] = []
+        for item in rows:
+            item_tags = {entry.strip().lower() for entry in item.tags if entry.strip()}
+            item_component = (item.component or "").lower()
+            item_decision_type = (item.decision_type or "").lower()
+            item_owners = [entry.lower() for entry in item.owners]
+
+            if tag_filters and not tag_filters.intersection(item_tags):
+                continue
+            if component_filter and component_filter not in item_component:
+                continue
+            if owner_filter and not any(owner_filter in entry for entry in item_owners):
+                continue
+            if decision_type_filter and decision_type_filter != item_decision_type:
+                continue
+            filtered.append(item)
+
+        query_text = (query or "").strip()
+        if not query_text:
+            return filtered[:limit]
+
+        q_tokens = _tokenize(query_text)
+        scored = [(item, _score_decision(item, q_tokens, query_text)) for item in filtered]
+        scored.sort(key=lambda row: row[1], reverse=True)
+        ranked = [item for item, score in scored if score > 0]
+        return ranked[:limit]
 
     def get_decision(self, decision_id: str) -> Decision | None:
         return self.store.get_decision(decision_id)

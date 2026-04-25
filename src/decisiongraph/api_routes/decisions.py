@@ -10,8 +10,25 @@ def create_decision_router(service: DecisionGraphService) -> APIRouter:
     router = APIRouter()
 
     @router.get('/api/decisions')
-    def list_decisions(limit: int = 20) -> dict[str, object]:
-        rows = [item.to_dict() for item in service.list_decisions(limit=limit)]
+    def list_decisions(
+        limit: int = 20,
+        q: str | None = None,
+        tag: str | None = None,
+        component: str | None = None,
+        owner: str | None = None,
+        decision_type: str | None = None,
+    ) -> dict[str, object]:
+        rows = [
+            item.to_dict()
+            for item in service.list_decisions(
+                limit=limit,
+                query=q,
+                tag=tag,
+                component=component,
+                owner=owner,
+                decision_type=decision_type,
+            )
+        ]
         return {'count': len(rows), 'items': rows}
 
     @router.get('/api/decisions/{decision_id}')

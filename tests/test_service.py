@@ -139,3 +139,28 @@ def test_ingest_slack_and_jira_exports(tmp_path: Path) -> None:
 
     answer = svc.query("Why did we revert microservice split?")
     assert answer.decision is not None
+
+
+def test_list_decisions_with_query_and_filters(tmp_path: Path) -> None:
+    svc = _service(tmp_path)
+    svc.seed_demo()
+
+    tagged = svc.list_decisions(limit=10, tag="payments")
+    assert tagged
+    assert all("payments" in [entry.lower() for entry in row.tags] for row in tagged)
+
+    by_component = svc.list_decisions(limit=10, component="settlement")
+    assert len(by_component) == 1
+    assert by_component[0].component == "settlement"
+
+    by_owner = svc.list_decisions(limit=10, owner="finance")
+    assert by_owner
+    assert all(any("finance" in owner.lower() for owner in row.owners) for row in by_owner)
+
+    by_type = svc.list_decisions(limit=10, decision_type="risk-policy")
+    assert by_type
+    assert all(row.decision_type == "risk-policy" for row in by_type)
+
+    by_query = svc.list_decisions(limit=10, query="rabbitmq")
+    assert by_query
+    assert "rabbitmq" in by_query[0].title.lower()
