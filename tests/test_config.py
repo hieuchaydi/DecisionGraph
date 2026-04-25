@@ -4,6 +4,7 @@ import pytest
 
 from decisiongraph.config import (
     alert_webhook_for_target,
+    audit_log_retention_limit,
     governance_mode,
     governance_required_fields,
     github_base_url,
@@ -41,3 +42,10 @@ def test_governance_mode_and_required_fields(monkeypatch) -> None:
 def test_alert_webhook_target_lookup(monkeypatch) -> None:
     monkeypatch.setenv("DECISIONGRAPH_ALERT_SLACK_WEBHOOK", "https://hooks.slack.local/demo")
     assert alert_webhook_for_target("slack") == "https://hooks.slack.local/demo"
+
+
+def test_audit_log_retention_limit(monkeypatch) -> None:
+    monkeypatch.setenv("DECISIONGRAPH_AUDIT_LOG_RETENTION", "321")
+    assert audit_log_retention_limit() == 321
+    monkeypatch.setenv("DECISIONGRAPH_AUDIT_LOG_RETENTION", "invalid")
+    assert audit_log_retention_limit() == 5000

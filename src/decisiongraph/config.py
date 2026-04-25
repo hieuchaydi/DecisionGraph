@@ -117,3 +117,14 @@ def rate_limit_per_minute() -> int:
     except ValueError:
         return 240
     return max(0, value)
+
+
+def audit_log_retention_limit() -> int:
+    raw = os.getenv("DECISIONGRAPH_AUDIT_LOG_RETENTION", "5000").strip()
+    if not raw:
+        return 5000
+    try:
+        value = int(raw)
+    except ValueError:
+        return 5000
+    return max(1, value)

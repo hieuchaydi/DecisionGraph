@@ -176,6 +176,7 @@ Key variables:
 - `DECISIONGRAPH_GOVERNANCE_MODE=off` governance policy mode (`off|warn|strict`)
 - `DECISIONGRAPH_GOVERNANCE_REQUIRED_FIELDS=owners,assumptions,risks` required fields when governance is enabled
 - `DECISIONGRAPH_RATE_LIMIT_PER_MINUTE=240` per-client rate limit (`0` disables)
+- `DECISIONGRAPH_AUDIT_LOG_RETENTION=5000` max retained audit events
 - `DECISIONGRAPH_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:5173`
 - `DECISIONGRAPH_GITHUB_TOKEN` for GitHub ingestion
 - `DECISIONGRAPH_GITHUB_BASE_URL=https://api.github.com`
@@ -389,6 +390,9 @@ Latest local validation (2026-04-25):
 CI pipeline:
 - [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
 - Backend matrix tests + benchmark gate on `tools/ci_eval.jsonl`
+
+Release notes:
+- [`CHANGELOG.md`](./CHANGELOG.md)
 
 ## Delivery Scope (3 Rounds)
 1. Round 1 (Core): ingestion, extraction, query, guardrail, contradiction, stale assumptions.

@@ -304,3 +304,15 @@ def test_watch_assumption_uses_connector_target_env(tmp_path: Path, monkeypatch)
     assert out["notification"]["attempted"] is True
     assert out["notification"]["sent"] is True
     assert out["notification"]["target"] == "slack"
+
+
+def test_audit_log_retention_limit_applied(tmp_path: Path) -> None:
+    store = DecisionStore(tmp_path / "retention.json", audit_log_limit=2)
+    svc = DecisionGraphService(store=store)
+    svc.set_metric("m1", 1.0, "u")
+    svc.set_metric("m2", 2.0, "u")
+    svc.set_metric("m3", 3.0, "u")
+    logs = svc.list_audit_logs(limit=10, event_type="metric.set")
+    assert len(logs) == 2
+    keys = [item["payload"]["key"] for item in logs]
+    assert "m1" not in keys

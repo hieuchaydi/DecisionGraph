@@ -17,8 +17,9 @@ STALE_LOCK_SECONDS = 60.0
 
 
 class DecisionStore:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, audit_log_limit: int = 5000):
         self.path = path
+        self.audit_log_limit = max(1, int(audit_log_limit))
         self._lock_path = self.path.with_suffix(f"{self.path.suffix}.lock")
         self._thread_lock = RLock()
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -236,5 +237,5 @@ class DecisionStore:
             data = self._read()
             logs = [item for item in data.get("audit_logs", []) if isinstance(item, dict)]
             logs.append(dict(entry))
-            data["audit_logs"] = logs[-5000:]
+            data["audit_logs"] = logs[-self.audit_log_limit :]
             self._write(data)

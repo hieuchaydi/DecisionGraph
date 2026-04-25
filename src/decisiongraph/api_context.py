@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from decisiongraph.config import (
     api_token,
+    audit_log_retention_limit,
     cors_origins,
     rate_limit_per_minute,
     resolve_data_path,
@@ -21,7 +22,12 @@ from decisiongraph.store import DecisionStore
 
 def build_service() -> DecisionGraphService:
     validate_runtime_configuration()
-    return DecisionGraphService(DecisionStore(path=resolve_data_path()))
+    return DecisionGraphService(
+        DecisionStore(
+            path=resolve_data_path(),
+            audit_log_limit=audit_log_retention_limit(),
+        )
+    )
 
 
 def _is_public_path(path: str) -> bool:
