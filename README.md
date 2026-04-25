@@ -30,6 +30,7 @@ DecisionGraph keeps that reasoning traceable with evidence so teams can move fas
 
 ### 2) Decision Intelligence
 - Decision query with confidence + warnings.
+- Decision list/search with filters (`q`, `tag`, `component`, `owner`, `decision_type`).
 - Contradiction detection.
 - Stale assumption detection from live metrics.
 - Summary report and graph snapshot.
@@ -95,6 +96,7 @@ Inside chat, ask questions directly or use commands:
 ```text
 /help
 /list 20
+/find <query>
 /get <decision_id>
 /guard <change request>
 /contradictions
@@ -109,6 +111,8 @@ Non-interactive CLI equivalents:
 
 ```bash
 decisiongraph list
+decisiongraph list --q "rabbitmq" --tag queues
+decisiongraph list --owner finance --decision-type risk-policy
 decisiongraph query "Why did we cap payment retries at 2?"
 decisiongraph guardrail "Increase retry attempts in payment flow"
 ```
@@ -196,7 +200,7 @@ curl http://127.0.0.1:8000/api/assumptions/stale
 - `GET /api/report/summary?format=json|markdown`
 
 ### Decisions
-- `GET /api/decisions`
+- `GET /api/decisions` (supports `limit`, `q`, `tag`, `component`, `owner`, `decision_type`)
 - `GET /api/decisions/{decision_id}`
 - `POST /api/query`
 - `POST /api/guardrail`
@@ -237,7 +241,7 @@ curl http://127.0.0.1:8000/api/assumptions/stale
 - `decisiongraph init [--reset]`
 - `decisiongraph seed-demo`
 - `decisiongraph chat [--list-limit 20] [--guardrail-limit 3]`
-- `decisiongraph list --limit 20`
+- `decisiongraph list --limit 20 [--q ...] [--tag ...] [--component ...] [--owner ...] [--decision-type ...]`
 - `decisiongraph get <decision_id>`
 - `decisiongraph query "..."`
 - `decisiongraph guardrail "..."`
