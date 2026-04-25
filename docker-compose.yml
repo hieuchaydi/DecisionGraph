@@ -1,17 +1,23 @@
-version: "3.9"
-
 services:
   decisiongraph:
     build: .
     container_name: decisiongraph
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
-      DECISIONGRAPH_ENV: production
+      DECISIONGRAPH_ENV: ${DECISIONGRAPH_ENV:-development}
       DECISIONGRAPH_DATA_PATH: /app/data/decisiongraph.json
-      # DECISIONGRAPH_API_TOKEN: change-me
-      # DECISIONGRAPH_CORS_ORIGINS: http://localhost:3000
+      DECISIONGRAPH_API_TOKEN: ${DECISIONGRAPH_API_TOKEN:-}
+      DECISIONGRAPH_REQUIRE_TOKEN_IN_PRODUCTION: ${DECISIONGRAPH_REQUIRE_TOKEN_IN_PRODUCTION:-true}
+      DECISIONGRAPH_CORS_ORIGINS: ${DECISIONGRAPH_CORS_ORIGINS:-}
     volumes:
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
-

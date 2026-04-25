@@ -56,6 +56,26 @@ curl http://127.0.0.1:8000/health
 Open API docs:
 - `http://127.0.0.1:8000/docs`
 
+## Quickstart (Docker)
+```bash
+cp .env.example .env
+docker compose up --build -d
+```
+
+Check health:
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+Tail logs / stop:
+```bash
+docker compose logs -f decisiongraph
+docker compose down
+```
+
+Production note:
+- If `DECISIONGRAPH_ENV=production`, set `DECISIONGRAPH_API_TOKEN` in `.env` (or set `DECISIONGRAPH_REQUIRE_TOKEN_IN_PRODUCTION=false` intentionally).
+
 ## CLI-Only Mode (No Web Server)
 If you only want terminal usage, skip `decisiongraph serve`.
 
