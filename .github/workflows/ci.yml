@@ -39,13 +39,23 @@ jobs:
             --min-keyword-coverage 0.65
 
   frontend:
-    if: ${{ hashFiles('docs/package.json') != '' && hashFiles('docs/package-lock.json') != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect frontend workspace
+        id: frontend
+        shell: bash
+        run: |
+          if [[ -f docs/package.json && -f docs/package-lock.json ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Node
+        if: steps.frontend.outputs.enabled == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -53,13 +63,20 @@ jobs:
           cache-dependency-path: docs/package-lock.json
 
       - name: Install frontend dependencies
+        if: steps.frontend.outputs.enabled == 'true'
         working-directory: docs
         run: npm ci
 
       - name: Run frontend lint
+        if: steps.frontend.outputs.enabled == 'true'
         working-directory: docs
         run: npm run lint
 
       - name: Run frontend build
+        if: steps.frontend.outputs.enabled == 'true'
         working-directory: docs
         run: npm run build
+
+      - name: Frontend skipped
+        if: steps.frontend.outputs.enabled != 'true'
+        run: echo "Skipping frontend job because docs/package.json or docs/package-lock.json is missing."
