@@ -14,7 +14,7 @@ __pycache__
 .venv
 venv
 node_modules
-docs-DecisionGraph
+docs
 
 data
 tests

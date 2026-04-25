@@ -14,7 +14,7 @@ dist/
 venv/
 
 node_modules/
-docs-DecisionGraph/dist/
+docs/dist/
 *.tsbuildinfo
 
 .env

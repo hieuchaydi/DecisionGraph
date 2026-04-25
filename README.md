@@ -1,6 +1,6 @@
 ﻿# DecisionGraph
 
-Engineering Decision Memory System with `CLI + API + MCP`, plus a docs frontend in [`docs-DecisionGraph`](./docs-DecisionGraph).
+Engineering Decision Memory System with `CLI + API + MCP`, plus a docs frontend in [`docs`](./docs).
 
 <p align="center">
   <img src="./assets/decisiongraph-logo.svg" alt="DecisionGraph logo" width="460">
@@ -47,6 +47,10 @@ decisiongraph init --reset
 decisiongraph seed-demo
 decisiongraph serve --host 127.0.0.1 --port 8000
 ```
+
+Quickstart demo:
+
+![DecisionGraph quickstart demo](./assets/animation.gif)
 
 Health check:
 ```bash
@@ -118,7 +122,7 @@ python -m decisiongraph query "Why did we cap payment retries at 2?"
 
 ## Quickstart (Docs Frontend)
 ```bash
-cd docs-DecisionGraph
+cd docs
 npm install
 npm run dev
 ```
@@ -290,7 +294,7 @@ src/decisiongraph/
   mcp_toolsets/          MCP tool groups
 
 tests/                   Backend test suite
-docs-DecisionGraph/      Frontend docs app (Vite + React)
+docs/                    Frontend docs app (Vite + React)
 assets/                  README visual assets
 ```
 
@@ -298,7 +302,7 @@ assets/                  README visual assets
 Local quality commands:
 ```bash
 python -m pytest -q
-cd docs-DecisionGraph && npm run lint && npm run build
+cd docs && npm run lint && npm run build
 ```
 
 Latest local validation (2026-04-25):

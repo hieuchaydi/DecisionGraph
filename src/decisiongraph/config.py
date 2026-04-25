@@ -67,6 +67,10 @@ def require_token_in_production() -> bool:
     return _env_bool("DECISIONGRAPH_REQUIRE_TOKEN_IN_PRODUCTION", True)
 
 
+def auto_seed_demo() -> bool:
+    return _env_bool("DECISIONGRAPH_AUTO_SEED_DEMO", False)
+
+
 def validate_runtime_configuration() -> None:
     env = environment_name().lower()
     if env == "production" and require_token_in_production() and not api_token():
