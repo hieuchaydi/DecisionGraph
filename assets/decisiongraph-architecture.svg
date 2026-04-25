@@ -1,0 +1,86 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
+  <title id="title">DecisionGraph Architecture Flow</title>
+  <desc id="desc">Sources flow into ingestion and extraction, then decision graph, and are served to CLI, API, MCP with guardrails and reporting.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f4fbff"/>
+      <stop offset="100%" stop-color="#e7f5ff"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0c6c88"/>
+      <stop offset="100%" stop-color="#0a4f66"/>
+    </linearGradient>
+    <style>
+      .box { fill: #ffffff; stroke: #4f8fa7; stroke-width: 2; rx: 16; }
+      .title { font-family: Segoe UI, Arial, sans-serif; font-size: 24px; font-weight: 700; fill: #0f3d52; }
+      .body { font-family: Segoe UI, Arial, sans-serif; font-size: 19px; fill: #2d5f75; }
+      .arrow { stroke: #2e7f9d; stroke-width: 3; fill: none; marker-end: url(#m); }
+    </style>
+    <marker id="m" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2e7f9d"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="820" fill="url(#bg)"/>
+
+  <text x="700" y="70" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="44" font-weight="700" fill="#0b3d52">
+    DecisionGraph System Flow
+  </text>
+  <text x="700" y="106" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#2d647d">
+    Preserve engineering intent, not just code changes
+  </text>
+
+  <rect x="80" y="180" width="290" height="220" class="box"/>
+  <text x="108" y="228" class="title">Signal Sources</text>
+  <text x="108" y="268" class="body">- Git history / PR / Issues</text>
+  <text x="108" y="300" class="body">- Slack / Jira / JSONL</text>
+  <text x="108" y="332" class="body">- Notes / RFC / incidents</text>
+
+  <rect x="430" y="180" width="290" height="220" class="box"/>
+  <text x="458" y="228" class="title">Ingestion + Extractor</text>
+  <text x="458" y="268" class="body">- Normalize evidence</text>
+  <text x="458" y="300" class="body">- Build decision objects</text>
+  <text x="458" y="332" class="body">- Score confidence</text>
+
+  <rect x="780" y="140" width="350" height="300" rx="24" fill="url(#core)" stroke="#4fd7ff" stroke-width="2"/>
+  <text x="955" y="198" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="31" font-weight="700" fill="#e7fbff">
+    Decision Graph Core
+  </text>
+  <text x="820" y="246" font-family="Segoe UI, Arial, sans-serif" font-size="21" fill="#d5f4ff">- Decision + evidence links</text>
+  <text x="820" y="282" font-family="Segoe UI, Arial, sans-serif" font-size="21" fill="#d5f4ff">- Contradiction detection</text>
+  <text x="820" y="318" font-family="Segoe UI, Arial, sans-serif" font-size="21" fill="#d5f4ff">- Stale assumption checks</text>
+  <text x="820" y="354" font-family="Segoe UI, Arial, sans-serif" font-size="21" fill="#d5f4ff">- Summary report + KPIs</text>
+
+  <rect x="1180" y="180" width="180" height="110" class="box"/>
+  <text x="1270" y="228" text-anchor="middle" class="title">CLI</text>
+  <text x="1270" y="260" text-anchor="middle" class="body">dev workflow</text>
+
+  <rect x="1180" y="305" width="180" height="110" class="box"/>
+  <text x="1270" y="353" text-anchor="middle" class="title">API</text>
+  <text x="1270" y="385" text-anchor="middle" class="body">web/service</text>
+
+  <rect x="1180" y="430" width="180" height="110" class="box"/>
+  <text x="1270" y="478" text-anchor="middle" class="title">MCP</text>
+  <text x="1270" y="510" text-anchor="middle" class="body">agent tools</text>
+
+  <rect x="430" y="500" width="350" height="210" class="box"/>
+  <text x="458" y="548" class="title">Guardrails + Ops</text>
+  <text x="458" y="588" class="body">- Sensitive-area blocking</text>
+  <text x="458" y="620" class="body">- Security audit + doctor</text>
+  <text x="458" y="652" class="body">- Rate limit + auth policy</text>
+
+  <rect x="830" y="500" width="300" height="210" class="box"/>
+  <text x="858" y="548" class="title">Outputs</text>
+  <text x="858" y="588" class="body">- Why answer + evidence</text>
+  <text x="858" y="620" class="body">- Related decisions</text>
+  <text x="858" y="652" class="body">- Risk warnings</text>
+
+  <path class="arrow" d="M370 290 L420 290"/>
+  <path class="arrow" d="M720 290 L770 290"/>
+  <path class="arrow" d="M1130 235 L1170 235"/>
+  <path class="arrow" d="M1130 360 L1170 360"/>
+  <path class="arrow" d="M1130 485 L1170 485"/>
+  <path class="arrow" d="M955 440 L955 490"/>
+  <path class="arrow" d="M780 605 L820 605"/>
+  <path class="arrow" d="M605 500 L780 390"/>
+</svg>

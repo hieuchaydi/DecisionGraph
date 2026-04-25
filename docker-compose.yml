@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  decisiongraph:
+    build: .
+    container_name: decisiongraph
+    ports:
+      - "8000:8000"
+    environment:
+      DECISIONGRAPH_ENV: production
+      DECISIONGRAPH_DATA_PATH: /app/data/decisiongraph.json
+      # DECISIONGRAPH_API_TOKEN: change-me
+      # DECISIONGRAPH_CORS_ORIGINS: http://localhost:3000
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
