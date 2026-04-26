@@ -63,10 +63,6 @@ Health check:
 ```bash
 curl http://127.0.0.1:8000/health
 ```
-
-Open API docs:
-- `http://127.0.0.1:8000/docs`
-
 ## Quickstart (Docker)
 ```bash
 cp .env.example .env
